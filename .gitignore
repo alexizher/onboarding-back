@@ -2,7 +2,11 @@
 *.class
 
 # Log file
+logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # BlueJ files
 *.ctxt
@@ -18,7 +22,75 @@
 *.zip
 *.tar.gz
 *.rar
+*.tgz
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+
+### VS Code ###
+.vscode/
+
+### Environment Variables ###
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+### Docker & Podman ###
+docker-compose.override.yml
+podman-compose.override.yml
+.dockerignore
+
+### Database ###
+database/data/
+*.sql
+*.db
+
+### Storybook build outputs ###
+.out
+.storybook-out
+
+### Temporary folders ###
+tmp/
+temp/
+
+### Optional eslint cache ###
+.eslintcache
+
+### Microbundle cache ###
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
