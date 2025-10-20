@@ -5,13 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
-import tech.nocountry.onboarding.enums.Role;
-
-import java.util.Collection;
-import java.util.List;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
@@ -19,30 +13,43 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class User implements UserDetails {
+public class User {
+    
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    // Datos sensibles (se cifrarán con AES-256)
-    @Column(unique = true)
-    String username;
-
-    // Contraseña (se guardará con hash BCrypt)
-    @Column(nullable = false)
-    private String password;
-
-    //Otros campos útiles
-    private boolean active = true; // Para borrado lógico
-
-    @Enumerated(EnumType.STRING)
-    Role role;
-
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
-    private Onboarding onboarding;
-
-    @Override
-    public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority(role.name()));
-    }
+    @Column(name = "user_id")
+    private Long userId;
+    
+    @Column(name = "username", nullable = false, unique = true, length = 50)
+    private String username;
+    
+    @Column(name = "email", nullable = false, unique = true, length = 100)
+    private String email;
+    
+    @Column(name = "password_hash", nullable = false)
+    private String passwordHash;
+    
+    @Column(name = "full_name", length = 100)
+    private String fullName;
+    
+    @Column(name = "phone", length = 20)
+    private String phone;
+    
+    @Column(name = "dni", length = 20)
+    private String dni;
+    
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+    
+    @Column(name = "consent_gdpr", nullable = false)
+    private Boolean consentGdpr = false;
+    
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
+    
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+    
+    @Column(name = "last_login")
+    private LocalDateTime lastLogin;
 }

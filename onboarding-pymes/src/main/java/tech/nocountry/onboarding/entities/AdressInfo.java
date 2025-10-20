@@ -1,6 +1,5 @@
 package tech.nocountry.onboarding.entities;
 
-
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -22,5 +21,4 @@ public class AdressInfo {
     private String city;
 
     private boolean encrypted = true;
-
 }

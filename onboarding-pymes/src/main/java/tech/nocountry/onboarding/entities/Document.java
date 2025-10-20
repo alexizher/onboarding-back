@@ -28,4 +28,3 @@ public class Document {
 
     private LocalDateTime uploadedAt = LocalDateTime.now();
 }
-
