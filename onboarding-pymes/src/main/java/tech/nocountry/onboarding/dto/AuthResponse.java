@@ -15,14 +15,14 @@ public class AuthResponse {
     
     private boolean success;
     private String message;
-    private Long userId;
+    private String userId;
     private String username;
     private String email;
     private String fullName;
     private LocalDateTime lastLogin;
     
     // Métodos estáticos para crear respuestas comunes
-    public static AuthResponse success(String message, Long userId, String username, String email, String fullName) {
+    public static AuthResponse success(String message, String userId, String username, String email, String fullName) {
         return AuthResponse.builder()
                 .success(true)
                 .message(message)

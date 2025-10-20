@@ -18,7 +18,7 @@ public class UserService {
     /**
      * Busca un usuario por ID
      */
-    public Optional<User> findById(Long userId) {
+    public Optional<User> findById(String userId) {
         return userRepository.findById(userId);
     }
 
@@ -56,7 +56,7 @@ public class UserService {
     /**
      * Desactiva un usuario (soft delete)
      */
-    public boolean deactivateUser(Long userId) {
+    public boolean deactivateUser(String userId) {
         Optional<User> userOptional = userRepository.findById(userId);
         if (userOptional.isPresent()) {
             User user = userOptional.get();
@@ -71,7 +71,7 @@ public class UserService {
     /**
      * Activa un usuario
      */
-    public boolean activateUser(Long userId) {
+    public boolean activateUser(String userId) {
         Optional<User> userOptional = userRepository.findById(userId);
         if (userOptional.isPresent()) {
             User user = userOptional.get();
@@ -86,7 +86,7 @@ public class UserService {
     /**
      * Actualiza el último login de un usuario
      */
-    public void updateLastLogin(Long userId) {
+    public void updateLastLogin(String userId) {
         Optional<User> userOptional = userRepository.findById(userId);
         if (userOptional.isPresent()) {
             User user = userOptional.get();
@@ -98,7 +98,7 @@ public class UserService {
     /**
      * Verifica si un usuario existe y está activo
      */
-    public boolean isUserActive(Long userId) {
+    public boolean isUserActive(String userId) {
         Optional<User> userOptional = userRepository.findById(userId);
         return userOptional.isPresent() && userOptional.get().getIsActive();
     }

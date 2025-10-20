@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -40,12 +41,13 @@ public class AuthService {
 
             // Crear el nuevo usuario
             User user = User.builder()
+                    .userId(UUID.randomUUID().toString()) // Generar UUID como String
+                    .dni(request.getDni())
+                    .fullName(request.getFullName())
                     .username(request.getUsername())
                     .email(request.getEmail())
                     .passwordHash(passwordEncoder.encode(request.getPassword()))
-                    .fullName(request.getFullName())
                     .phone(request.getPhone())
-                    .dni(request.getDni())
                     .isActive(true)
                     .consentGdpr(false) // Por defecto false, se puede cambiar después
                     .createdAt(LocalDateTime.now())
@@ -70,15 +72,14 @@ public class AuthService {
     /**
      * Método de compatibilidad para el controlador actual
      */
-    public Map<String, Object> registerUser(String username, String email, String password, 
-                                          String fullName, String phone, String dni) {
+    public Map<String, Object> registerUser(String username, String email, String password, String fullName, String phone, String dni) {
         RegisterRequest request = RegisterRequest.builder()
+                .dni(dni)
+                .fullName(fullName)
                 .username(username)
                 .email(email)
                 .password(password)
-                .fullName(fullName)
                 .phone(phone)
-                .dni(dni)
                 .build();
         
         AuthResponse response = registerUser(request);
