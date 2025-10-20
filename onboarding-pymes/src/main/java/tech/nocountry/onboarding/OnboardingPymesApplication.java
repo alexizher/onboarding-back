@@ -6,8 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class OnboardingPymesApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(OnboardingPymesApplication.class, args);
-	}
-
+    public static void main(String[] args) {
+        SpringApplication.run(OnboardingPymesApplication.class, args);
+    }
 }
