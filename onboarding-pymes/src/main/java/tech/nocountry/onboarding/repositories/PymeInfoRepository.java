@@ -9,6 +9,5 @@ import java.util.Optional;
 @Repository
 public interface PymeInfoRepository extends JpaRepository<PymeInfo, Long> {
 
-    Optional<PymeInfo> findByUserId(Long userId);
-
+    Optional<PymeInfo> findByUserUserId(Long userId);
 }
