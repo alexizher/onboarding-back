@@ -3,6 +3,9 @@ package tech.nocountry.onboarding.services;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import tech.nocountry.onboarding.dto.AuthResponse;
+import tech.nocountry.onboarding.dto.LoginRequest;
+import tech.nocountry.onboarding.dto.RegisterRequest;
 import tech.nocountry.onboarding.entities.User;
 import tech.nocountry.onboarding.repositories.UserRepository;
 
@@ -23,33 +26,26 @@ public class AuthService {
     /**
      * Registra un nuevo usuario en el sistema
      */
-    public Map<String, Object> registerUser(String username, String email, String password, 
-                                          String fullName, String phone, String dni) {
-        Map<String, Object> response = new HashMap<>();
-
+    public AuthResponse registerUser(RegisterRequest request) {
         try {
             // Validar que el username no esté en uso
-            if (userRepository.existsByUsername(username)) {
-                response.put("success", false);
-                response.put("message", "El nombre de usuario ya está en uso");
-                return response;
+            if (userRepository.existsByUsername(request.getUsername())) {
+                return AuthResponse.error("El nombre de usuario ya está en uso");
             }
 
             // Validar que el email no esté en uso
-            if (userRepository.existsByEmail(email)) {
-                response.put("success", false);
-                response.put("message", "El email ya está registrado");
-                return response;
+            if (userRepository.existsByEmail(request.getEmail())) {
+                return AuthResponse.error("El email ya está registrado");
             }
 
             // Crear el nuevo usuario
             User user = User.builder()
-                    .username(username)
-                    .email(email)
-                    .passwordHash(passwordEncoder.encode(password))
-                    .fullName(fullName)
-                    .phone(phone)
-                    .dni(dni)
+                    .username(request.getUsername())
+                    .email(request.getEmail())
+                    .passwordHash(passwordEncoder.encode(request.getPassword()))
+                    .fullName(request.getFullName())
+                    .phone(request.getPhone())
+                    .dni(request.getDni())
                     .isActive(true)
                     .consentGdpr(false) // Por defecto false, se puede cambiar después
                     .createdAt(LocalDateTime.now())
@@ -58,69 +54,110 @@ public class AuthService {
             // Guardar el usuario
             User savedUser = userRepository.save(user);
 
-            response.put("success", true);
-            response.put("message", "Usuario registrado exitosamente");
-            response.put("userId", savedUser.getUserId());
-            response.put("email", savedUser.getEmail());
-            response.put("username", savedUser.getUsername());
+            return AuthResponse.success(
+                "Usuario registrado exitosamente",
+                savedUser.getUserId(),
+                savedUser.getUsername(),
+                savedUser.getEmail(),
+                savedUser.getFullName()
+            );
 
         } catch (Exception e) {
-            response.put("success", false);
-            response.put("message", "Error en el registro: " + e.getMessage());
+            return AuthResponse.error("Error en el registro: " + e.getMessage());
         }
+    }
 
-        return response;
+    /**
+     * Método de compatibilidad para el controlador actual
+     */
+    public Map<String, Object> registerUser(String username, String email, String password, 
+                                          String fullName, String phone, String dni) {
+        RegisterRequest request = RegisterRequest.builder()
+                .username(username)
+                .email(email)
+                .password(password)
+                .fullName(fullName)
+                .phone(phone)
+                .dni(dni)
+                .build();
+        
+        AuthResponse response = registerUser(request);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", response.isSuccess());
+        result.put("message", response.getMessage());
+        if (response.getUserId() != null) {
+            result.put("userId", response.getUserId());
+            result.put("email", response.getEmail());
+            result.put("username", response.getUsername());
+        }
+        
+        return result;
     }
 
     /**
      * Autentica un usuario con email y contraseña
      */
-    public Map<String, Object> loginUser(String email, String password) {
-        Map<String, Object> response = new HashMap<>();
-
+    public AuthResponse loginUser(LoginRequest request) {
         try {
             // Buscar el usuario por email
-            Optional<User> userOptional = userRepository.findByEmail(email);
+            Optional<User> userOptional = userRepository.findByEmail(request.getEmail());
             
             if (userOptional.isEmpty()) {
-                response.put("success", false);
-                response.put("message", "Credenciales inválidas");
-                return response;
+                return AuthResponse.error("Credenciales inválidas");
             }
 
             User user = userOptional.get();
 
             // Verificar que el usuario esté activo
             if (!user.getIsActive()) {
-                response.put("success", false);
-                response.put("message", "La cuenta está desactivada");
-                return response;
+                return AuthResponse.error("La cuenta está desactivada");
             }
 
             // Verificar la contraseña
-            if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-                response.put("success", false);
-                response.put("message", "Credenciales inválidas");
-                return response;
+            if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+                return AuthResponse.error("Credenciales inválidas");
             }
 
             // Actualizar el último login
             user.setLastLogin(LocalDateTime.now());
             userRepository.save(user);
 
-            response.put("success", true);
-            response.put("message", "Login exitoso");
-            response.put("userId", user.getUserId());
-            response.put("email", user.getEmail());
-            response.put("username", user.getUsername());
-            response.put("fullName", user.getFullName());
+            return AuthResponse.success(
+                "Login exitoso",
+                user.getUserId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getFullName()
+            );
 
         } catch (Exception e) {
-            response.put("success", false);
-            response.put("message", "Error en el login: " + e.getMessage());
+            return AuthResponse.error("Error en el login: " + e.getMessage());
         }
+    }
 
-        return response;
+    /**
+     * Método de compatibilidad para el controlador actual
+     */
+    public Map<String, Object> loginUser(String email, String password) {
+        LoginRequest request = LoginRequest.builder()
+                .email(email)
+                .password(password)
+                .build();
+        
+        AuthResponse response = loginUser(request);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", response.isSuccess());
+        result.put("message", response.getMessage());
+        if (response.getUserId() != null) {
+            result.put("userId", response.getUserId());
+            result.put("email", response.getEmail());
+            result.put("username", response.getUsername());
+            result.put("fullName", response.getFullName());
+        }
+        
+        return result;
     }
 
     /**
