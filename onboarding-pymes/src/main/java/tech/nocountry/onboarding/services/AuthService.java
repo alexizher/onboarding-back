@@ -7,7 +7,9 @@ import tech.nocountry.onboarding.dto.AuthResponse;
 import tech.nocountry.onboarding.dto.LoginRequest;
 import tech.nocountry.onboarding.dto.RegisterRequest;
 import tech.nocountry.onboarding.entities.User;
+import tech.nocountry.onboarding.entities.Role;
 import tech.nocountry.onboarding.repositories.UserRepository;
+import tech.nocountry.onboarding.repositories.RoleRepository;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -20,6 +22,9 @@ public class AuthService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private RoleRepository roleRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -39,6 +44,10 @@ public class AuthService {
                 return AuthResponse.error("El email ya está registrado");
             }
 
+            // Obtener rol por defecto (APPLICANT)
+            Role defaultRole = roleRepository.findByRoleId("ROLE_APPLICANT")
+                    .orElseThrow(() -> new RuntimeException("Rol por defecto no encontrado"));
+
             // Crear el nuevo usuario
             User user = User.builder()
                     .userId(UUID.randomUUID().toString()) // Generar UUID como String
@@ -48,6 +57,7 @@ public class AuthService {
                     .email(request.getEmail())
                     .passwordHash(passwordEncoder.encode(request.getPassword()))
                     .phone(request.getPhone())
+                    .role(defaultRole) // Asignar rol por defecto
                     .isActive(true)
                     .consentGdpr(false) // Por defecto false, se puede cambiar después
                     .createdAt(LocalDateTime.now())
