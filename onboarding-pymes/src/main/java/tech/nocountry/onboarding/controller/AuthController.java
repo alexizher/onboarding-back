@@ -28,12 +28,13 @@ public class AuthController {
      */
     @PostMapping("/register")
     public Map<String, Object> register(@RequestBody Map<String, String> request) {
+        String dni = request.get("dni");
+        String fullName = request.get("fullName");
         String username = request.get("username");
         String email = request.get("email");
         String password = request.get("password");
-        String fullName = request.get("fullName");
         String phone = request.get("phone");
-        String dni = request.get("dni");
+        
         
         // Validaciones básicas
         if (username == null || email == null || password == null) {

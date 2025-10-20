@@ -11,9 +11,9 @@ import java.util.Optional;
 
 @Repository
 public interface OnboardingRepository extends JpaRepository<Onboarding, Long> {
-    Optional<Onboarding> findByUserUserId(Long userId);
+    Optional<Onboarding> findByUserUserId(String userId);
 
     @Modifying
     @Query(value = "CALL update_onboarding_step(:userId, :step)", nativeQuery = true)
-    void updateOnboardingStep(@Param("userId") Long userId, @Param("step") int step);
+    void updateOnboardingStep(@Param("userId") String userId, @Param("step") int step);
 }
