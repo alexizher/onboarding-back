@@ -10,6 +10,7 @@ import tech.nocountry.onboarding.entities.User;
 import tech.nocountry.onboarding.entities.Role;
 import tech.nocountry.onboarding.repositories.UserRepository;
 import tech.nocountry.onboarding.repositories.RoleRepository;
+import tech.nocountry.onboarding.security.JwtService;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -28,6 +29,9 @@ public class AuthService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtService jwtService;
 
     /**
      * Registra un nuevo usuario en el sistema
@@ -66,12 +70,16 @@ public class AuthService {
             // Guardar el usuario
             User savedUser = userRepository.save(user);
 
+            // Generate JWT token for registration
+            String token = jwtService.generateToken(savedUser);
+
             return AuthResponse.success(
                 "Usuario registrado exitosamente",
                 savedUser.getUserId(),
                 savedUser.getUsername(),
                 savedUser.getEmail(),
-                savedUser.getFullName()
+                savedUser.getFullName(),
+                token
             );
 
         } catch (Exception e) {
@@ -101,6 +109,7 @@ public class AuthService {
             result.put("userId", response.getUserId());
             result.put("email", response.getEmail());
             result.put("username", response.getUsername());
+            result.put("token", response.getToken());
         }
         
         return result;
@@ -134,12 +143,16 @@ public class AuthService {
             user.setLastLogin(LocalDateTime.now());
             userRepository.save(user);
 
+            // Generar JWT token
+            String token = jwtService.generateToken(user);
+
             return AuthResponse.success(
                 "Login exitoso",
                 user.getUserId(),
                 user.getUsername(),
                 user.getEmail(),
-                user.getFullName()
+                user.getFullName(),
+                token
             );
 
         } catch (Exception e) {
@@ -166,6 +179,7 @@ public class AuthService {
             result.put("email", response.getEmail());
             result.put("username", response.getUsername());
             result.put("fullName", response.getFullName());
+            result.put("token", response.getToken());
         }
         
         return result;

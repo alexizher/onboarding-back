@@ -19,10 +19,11 @@ public class AuthResponse {
     private String username;
     private String email;
     private String fullName;
+    private String token;
     private LocalDateTime lastLogin;
     
     // Métodos estáticos para crear respuestas comunes
-    public static AuthResponse success(String message, String userId, String username, String email, String fullName) {
+    public static AuthResponse success(String message, String userId, String username, String email, String fullName, String token) {
         return AuthResponse.builder()
                 .success(true)
                 .message(message)
@@ -30,6 +31,7 @@ public class AuthResponse {
                 .username(username)
                 .email(email)
                 .fullName(fullName)
+                .token(token)
                 .build();
     }
     
