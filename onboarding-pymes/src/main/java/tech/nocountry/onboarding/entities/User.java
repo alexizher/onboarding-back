@@ -33,6 +33,7 @@ public class User implements UserDetails {
     private String password;
 
     //Otros campos útiles
+    @Builder.Default
     private boolean active = true; // Para borrado lógico
 
     @Enumerated(EnumType.STRING)
