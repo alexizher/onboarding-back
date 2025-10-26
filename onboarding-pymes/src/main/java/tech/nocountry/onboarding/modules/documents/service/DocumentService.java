@@ -46,9 +46,8 @@ public class DocumentService {
         DocumentType documentType = documentTypeRepository.findById(request.getDocumentTypeId())
                 .orElseThrow(() -> new RuntimeException("Tipo de documento no encontrado"));
 
-        // Obtener la aplicación
-        tech.nocountry.onboarding.modules.applications.dto.ApplicationResponse application = 
-                applicationService.getApplicationById(request.getApplicationId());
+        // Validar que la aplicación existe
+        applicationService.getApplicationById(request.getApplicationId());
         
         // Convertir base64 a bytes
         byte[] fileBytes;
