@@ -14,11 +14,13 @@ public interface CreditApplicationRepository extends JpaRepository<CreditApplica
 
     Optional<CreditApplication> findByApplicationId(String applicationId);
 
-    List<CreditApplication> findByUserId(String userId);
+    @Query("SELECT ca FROM CreditApplication ca WHERE ca.user.userId = :userId")
+    List<CreditApplication> findByUserId(@Param("userId") String userId);
 
     List<CreditApplication> findByStatus(String status);
 
-    List<CreditApplication> findByAssignedTo(String assignedTo);
+    @Query("SELECT ca FROM CreditApplication ca WHERE ca.assignedTo.userId = :assignedTo")
+    List<CreditApplication> findByAssignedTo(@Param("assignedTo") String assignedTo);
 
     @Query("SELECT ca FROM CreditApplication ca WHERE ca.status = :status")
     List<CreditApplication> findAllByStatus(@Param("status") String status);
