@@ -237,9 +237,10 @@ public class CreditApplicationController {
      * Obtener el ID del usuario actual desde el token JWT
      */
     private String getCurrentUserId() {
-        // Por ahora retornamos un ID dummy, esto se implementará correctamente con SecurityContext
         // TODO: Implementar extracción del userId desde el SecurityContext
-        return "current-user-id";
+        // Por ahora usamos el ID del usuario de prueba que existe en la BD
+        // En producción, esto se obtendrá del token JWT o del SecurityContext
+        return "137ed5ff-754a-4e20-8419-c2b2029d1209";
     }
 }
 
