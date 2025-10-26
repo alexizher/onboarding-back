@@ -39,19 +39,25 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Endpoints públicos
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/test/**").permitAll()
+                //.requestMatchers("/api/auth/**").permitAll()
+                //.requestMatchers("/api/test/**").permitAll()
                 
                 // Endpoints protegidos por roles
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/manager/**").hasAnyRole("MANAGER", "ADMIN")
-                .requestMatchers("/api/analyst/**").hasAnyRole("ANALYST", "MANAGER", "ADMIN")
-                .requestMatchers("/api/applicant/**").hasAnyRole("APPLICANT", "ANALYST", "MANAGER", "ADMIN")
+                //.requestMatchers("/api/admin/**").hasRole("ADMIN")
+                //.requestMatchers("/api/manager/**").hasAnyRole("MANAGER", "ADMIN")
+                //.requestMatchers("/api/analyst/**").hasAnyRole("ANALYST", "MANAGER", "ADMIN")
+                //.requestMatchers("/api/applicant/**").hasAnyRole("APPLICANT", "ANALYST", "MANAGER", "ADMIN")
                 
                 // Cualquier otra petición requiere autenticación
-                .anyRequest().authenticated()
+                //.anyRequest().authenticated()
+                // Permitir acceso sin autenticación a TODO
+                .requestMatchers("/**").permitAll()
+                .anyRequest().permitAll()
             )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .headers(headers -> headers
+                .frameOptions(frame -> frame.disable())  // Permitir frames de H2
+            );
 
         return http.build();
     }
