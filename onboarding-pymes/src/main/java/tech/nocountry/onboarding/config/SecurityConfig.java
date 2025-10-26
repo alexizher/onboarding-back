@@ -54,6 +54,7 @@ public class SecurityConfig {
                 // Endpoints públicos
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/test/**").permitAll()
+                .requestMatchers("/api/applications/**").permitAll()
                 .requestMatchers("/api/security/password-reset/**").permitAll()
                 .requestMatchers("/api/security/validate-password").permitAll()
                 
