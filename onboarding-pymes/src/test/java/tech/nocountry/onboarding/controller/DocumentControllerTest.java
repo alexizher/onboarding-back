@@ -73,10 +73,16 @@ class DocumentControllerTest {
         // Arrange
         setupSecurityContext();
         
-        DocumentUploadRequest request = new DocumentUploadRequest();
-        request.setApplicationId("app-123");
-        request.setDocumentTypeId("doc-123");
-        request.setFileName("test.pdf");
+        // Crear request con todos los campos requeridos
+        String validBase64 = "JVBERi0xLjMKJeLjz9MKMyAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMSAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAxIDAgUgovUmVzb3VyY2VzIDIgMCBSCi9Db250ZW50cyAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovUHJvY1NldCBbIC9QREYgL1RleHQgXQovQ29sb3JTcGFjZSA8PAovU3AzIDUgMCBSCj4+Ci9Gb250IDw8Cj4+Cj4+CjMgMCBvYmoKPDwKL0xlbmd0aCA0NQo+PgpzdHJlYW0KQlQKMTIxIDcwNyA1MDAgNzIwIHJlClcKTiAKUQpRCmVuZHN0cmVhbQplbmRvYmoKMSAwIG9iago8PAovVHlwZSAvUGFnZXMKL0NvdW50IDEKL0tpZHMgWyA0IDAgUiBdCj4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAzNTUgMDAwMDAgbgowMDAwMDAwMDI1IDAwMDAwIG4KMDAwMDAwMDU2OCAwMDAwMCBuCjAwMDAwMDAxMjIgMDAwMDAgbgowMDAwMDAwNTAwIDAwMDAwIG4KdHJhaWxlcgo8PAovU2l6ZSA2Ci9Sb290IDEgMCBSCj4+CnN0YXJ0eHJlZgo3MjMKJSVFT0Y=";
+        
+        DocumentUploadRequest request = DocumentUploadRequest.builder()
+                .applicationId("app-123")
+                .documentTypeId("doc-123")
+                .fileName("test.pdf")
+                .fileContent(validBase64)
+                .mimeType("application/pdf")
+                .build();
         
         DocumentResponse response = DocumentResponse.builder()
                 .documentId("doc-123")
@@ -104,7 +110,16 @@ class DocumentControllerTest {
         // Arrange
         setupSecurityContext();
         
-        DocumentUploadRequest request = new DocumentUploadRequest();
+        // Crear request válido con base64
+        String validBase64 = "JVBERi0xLjMKJeLjz9MKMyAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMSAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAxIDAgUgovUmVzb3VyY2VzIDIgMCBSCi9Db250ZW50cyAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovUHJvY1NldCBbIC9QREYgL1RleHQgXQovQ29sb3JTcGFjZSA8PAovU3AzIDUgMCBSCj4+Ci9Gb250IDw8Cj4+Cj4+CjMgMCBvYmoKPDwKL0xlbmd0aCA0NQo+PgpzdHJlYW0KQlQKMTIxIDcwNyA1MDAgNzIwIHJlClcKTiAKUQpRCmVuZHN0cmVhbQplbmRvYmoKMSAwIG9iago8PAovVHlwZSAvUGFnZXMKL0NvdW50IDEKL0tpZHMgWyA0IDAgUiBdCj4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAzNTUgMDAwMDAgbgowMDAwMDAwMDI1IDAwMDAwIG4KMDAwMDAwMDU2OCAwMDAwMCBuCjAwMDAwMDAxMjIgMDAwMDAgbgowMDAwMDAwNTAwIDAwMDAwIG4KdHJhaWxlcgo8PAovU2l6ZSA2Ci9Sb290IDEgMCBSCj4+CnN0YXJ0eHJlZgo3MjMKJSVFT0Y=";
+        
+        DocumentUploadRequest request = DocumentUploadRequest.builder()
+                .applicationId("app-123")
+                .documentTypeId("doc-123")
+                .fileName("test.pdf")
+                .fileContent(validBase64)
+                .mimeType("application/pdf")
+                .build();
         
         when(documentService.uploadDocument(anyString(), any(DocumentUploadRequest.class)))
                 .thenThrow(new RuntimeException("Service error"));
