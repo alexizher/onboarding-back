@@ -6,8 +6,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import tech.nocountry.onboarding.dto.ApiResponse;
+import tech.nocountry.onboarding.entities.User;
 import tech.nocountry.onboarding.modules.applications.dto.ApplicationRequest;
 import tech.nocountry.onboarding.modules.applications.dto.ApplicationResponse;
 import tech.nocountry.onboarding.modules.applications.dto.ApplicationUpdateRequest;
@@ -234,13 +236,21 @@ public class CreditApplicationController {
     }
 
     /**
-     * Obtener el ID del usuario actual desde el token JWT
+     * Obtener el ID del usuario actual desde el SecurityContext
      */
     private String getCurrentUserId() {
-        // TODO: Implementar extracción del userId desde el SecurityContext
-        // Por ahora usamos el ID del usuario de prueba que existe en la BD
-        // En producción, esto se obtendrá del token JWT o del SecurityContext
-        return "137ed5ff-754a-4e20-8419-c2b2029d1209";
+        try {
+            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            
+            if (principal instanceof User) {
+                return ((User) principal).getUserId();
+            }
+            
+            throw new IllegalStateException("Usuario no autenticado o formato de autenticación no válido");
+        } catch (Exception e) {
+            log.error("Error al obtener el ID del usuario actual: {}", e.getMessage());
+            throw new IllegalStateException("No se pudo obtener el ID del usuario: " + e.getMessage());
+        }
     }
 }
 
