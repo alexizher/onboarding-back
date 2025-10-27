@@ -17,7 +17,7 @@ public class AuditLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long userId; // Puede ser null si aún no hay sesión
+    private String userId; // Puede ser null si aún no hay sesión
 
     private String action;
 
