@@ -10,6 +10,7 @@ import tech.nocountry.onboarding.entities.User;
 import tech.nocountry.onboarding.modules.applications.service.ApplicationService;
 import tech.nocountry.onboarding.modules.documents.dto.DocumentResponse;
 import tech.nocountry.onboarding.modules.documents.dto.DocumentUploadRequest;
+import tech.nocountry.onboarding.modules.documents.dto.FileInfo;
 import tech.nocountry.onboarding.repositories.DocumentRepository;
 import tech.nocountry.onboarding.repositories.DocumentTypeRepository;
 import tech.nocountry.onboarding.repositories.UserRepository;
@@ -18,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -33,6 +35,13 @@ public class DocumentService {
     private final ApplicationService applicationService;
     
     private static final String UPLOAD_DIR = "uploads/documents/";
+    private static final int MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    private static final List<String> ALLOWED_MIME_TYPES = Arrays.asList(
+            "application/pdf",
+            "image/jpeg",
+            "image/png",
+            "image/jpg"
+    );
 
     @Transactional
     public DocumentResponse uploadDocument(String userId, DocumentUploadRequest request) {
@@ -56,6 +65,9 @@ public class DocumentService {
         } catch (IllegalArgumentException e) {
             throw new RuntimeException("Contenido del archivo inválido (no es base64 válido)");
         }
+        
+        // Validar archivo
+        validateFile(fileBytes, request.getMimeType());
 
         // Generar hash del archivo
         String hash = generateFileHash(fileBytes);
@@ -176,6 +188,66 @@ public class DocumentService {
 
     private String sanitizeFileName(String fileName) {
         return fileName.replaceAll("[^a-zA-Z0-9.-]", "_");
+    }
+
+    @Transactional(readOnly = true)
+    public FileInfo downloadDocument(String documentId) {
+        log.info("Downloading document by ID: {}", documentId);
+        
+        Document document = documentRepository.findByDocumentId(documentId)
+                .orElseThrow(() -> new RuntimeException("Documento no encontrado"));
+
+        try {
+            Path filePath = Paths.get(document.getFilePath());
+            byte[] fileBytes = Files.readAllBytes(filePath);
+            
+            return FileInfo.builder()
+                    .fileName(document.getFileName())
+                    .fileBytes(fileBytes)
+                    .mimeType(document.getMimeType())
+                    .build();
+        } catch (Exception e) {
+            log.error("Error reading file from disk", e);
+            throw new RuntimeException("Error al leer el archivo del disco: " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    public void deleteDocument(String documentId, String userId) {
+        log.info("Deleting document: {} by user: {}", documentId, userId);
+        
+        Document document = documentRepository.findByDocumentId(documentId)
+                .orElseThrow(() -> new RuntimeException("Documento no encontrado"));
+
+        // Validar que el usuario sea el propietario del documento
+        if (!document.getUser().getUserId().equals(userId)) {
+            throw new RuntimeException("No tiene permiso para eliminar este documento");
+        }
+
+        // Eliminar archivo del disco
+        try {
+            Path filePath = Paths.get(document.getFilePath());
+            Files.deleteIfExists(filePath);
+            log.info("File deleted from disk: {}", filePath);
+        } catch (Exception e) {
+            log.error("Error deleting file from disk", e);
+        }
+
+        // Eliminar de la base de datos
+        documentRepository.delete(document);
+        log.info("Document deleted from database: {}", documentId);
+    }
+
+    private void validateFile(byte[] fileBytes, String mimeType) {
+        // Validar tamaño
+        if (fileBytes.length > MAX_FILE_SIZE) {
+            throw new RuntimeException("Archivo muy grande. Máximo permitido: 10MB");
+        }
+
+        // Validar tipo MIME
+        if (mimeType != null && !ALLOWED_MIME_TYPES.contains(mimeType)) {
+            throw new RuntimeException("Tipo de archivo no permitido. Solo se permiten: PDF, JPEG, PNG");
+        }
     }
 
     private DocumentResponse mapToResponse(Document document) {
