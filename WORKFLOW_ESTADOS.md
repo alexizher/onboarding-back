@@ -109,10 +109,10 @@ Content-Type: application/json
 
 **Permisos:** Todos los roles autenticados  
 **Validaciones:**
-- ✅ Verifica que la transición sea válida según el estado actual
-- ✅ Verifica que el rol tenga permiso para ese estado
-- ✅ Validación especial para analistas (debe tener asignación)
-- ✅ Registra en historial
+- [x] Verifica que la transición sea válida según el estado actual
+- [x] Verifica que el rol tenga permiso para ese estado
+- [x] Validación especial para analistas (debe tener asignación)
+- [x] Registra en historial
 
 ### 2. Obtener Historial de Estados
 
@@ -231,16 +231,16 @@ Cada cambio de estado se registra en la tabla `application_status_history` con:
 Estado: DRAFT → SUBMITTED
 Rol: APPLICANT
 Transición: Permitida
-Registro en historial: ✅
+Registro en historial: [x]
 ```
 
 ### 2. Analyst revisa y aprueba
 ```
 Estado: UNDER_REVIEW → APPROVED
 Rol: ANALYST
-Validación: Debe tener asignación ✅
+Validación: Debe tener asignación [x]
 Transición: Permitida
-Registro en historial: ✅
+Registro en historial: [x]
 ```
 
 ### 3. Analyst solicita más documentos
@@ -249,13 +249,13 @@ Estado: UNDER_REVIEW → DOCUMENTS_PENDING
 Rol: ANALYST
 Comentarios: "Falta DNI actualizado"
 Transición: Permitida
-Registro en historial: ✅
+Registro en historial: [x]
 ```
 
 ### 4. Intentar transición inválida
 ```
 Estado: REJECTED → APPROVED
-Resultado: ❌ ERROR - Transición inválida
+Resultado: ERROR - Transición inválida
 Mensaje: "Transición inválida de 'REJECTED' a 'APPROVED'. Transiciones permitidas: []"
 ```
 
@@ -263,7 +263,7 @@ Mensaje: "Transición inválida de 'REJECTED' a 'APPROVED'. Transiciones permiti
 ```
 Estado: SUBMITTED → APPROVED
 Rol: APPLICANT
-Resultado: ❌ ERROR - Sin permisos
+Resultado: ERROR - Sin permisos
 Mensaje: "El rol 'APPLICANT' no tiene permiso para cambiar al estado 'APPROVED'"
 ```
 
@@ -271,12 +271,12 @@ Mensaje: "El rol 'APPLICANT' no tiene permiso para cambiar al estado 'APPROVED'"
 
 ## Beneficios Implementados
 
-✅ **Control de flujo:** Solo transiciones válidas permitidas  
-✅ **Seguridad:** Permisos por rol estrictos  
-✅ **Auditoría:** Historial completo de todos los cambios  
-✅ **Trazabilidad:** Quién, cuándo y por qué cambió el estado  
-✅ **Validaciones:** Múltiples capas de validación  
-✅ **Flexibilidad:** Configuración centralizada de transiciones  
+[x] **Control de flujo:** Solo transiciones válidas permitidas  
+[x] **Seguridad:** Permisos por rol estrictos  
+[x] **Auditoría:** Historial completo de todos los cambios  
+[x] **Trazabilidad:** Quién, cuándo y por qué cambió el estado  
+[x] **Validaciones:** Múltiples capas de validación  
+[x] **Flexibilidad:** Configuración centralizada de transiciones  
 
 ---
 
