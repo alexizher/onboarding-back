@@ -25,4 +25,8 @@ public interface DocumentRepository extends JpaRepository<Document, String> {
 
     @Query("SELECT d FROM Document d WHERE d.application.applicationId = :applicationId AND d.verificationStatus = :status")
     List<Document> findByApplicationIdAndVerificationStatus(@Param("applicationId") String applicationId, @Param("status") String status);
+
+    boolean existsByHash(String hash);
+
+    Optional<Document> findByHash(String hash);
 }

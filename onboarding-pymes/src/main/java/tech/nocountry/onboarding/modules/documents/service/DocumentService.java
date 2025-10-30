@@ -72,6 +72,11 @@ public class DocumentService {
         // Generar hash del archivo
         String hash = generateFileHash(fileBytes);
 
+        // Validar duplicados por hash
+        if (documentRepository.existsByHash(hash)) {
+            throw new RuntimeException("Documento duplicado: ya existe un archivo con el mismo contenido");
+        }
+
         // Guardar archivo en sistema de archivos
         String filePath = saveFile(fileBytes, request.getFileName(), request.getApplicationId());
 
