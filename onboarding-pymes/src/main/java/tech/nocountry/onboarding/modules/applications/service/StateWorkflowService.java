@@ -2,17 +2,20 @@ package tech.nocountry.onboarding.modules.applications.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tech.nocountry.onboarding.entities.ApplicationStatusHistory;
 import tech.nocountry.onboarding.entities.CreditApplication;
 import tech.nocountry.onboarding.entities.User;
 import tech.nocountry.onboarding.enums.ApplicationStatus;
-import tech.nocountry.onboarding.modules.applications.dto.StatusChangeRequest;
 import tech.nocountry.onboarding.modules.applications.dto.StatusHistoryResponse;
+import tech.nocountry.onboarding.modules.applications.events.ApplicationStatusChangedEvent;
 import tech.nocountry.onboarding.repositories.ApplicationStatusHistoryRepository;
 import tech.nocountry.onboarding.repositories.CreditApplicationRepository;
 import tech.nocountry.onboarding.repositories.UserRepository;
+import tech.nocountry.onboarding.repositories.DocumentRepository;
+import tech.nocountry.onboarding.repositories.DocumentTypeRepository;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -29,6 +32,9 @@ public class StateWorkflowService {
     private final CreditApplicationRepository applicationRepository;
     private final ApplicationStatusHistoryRepository statusHistoryRepository;
     private final UserRepository userRepository;
+    private final DocumentRepository documentRepository;
+    private final DocumentTypeRepository documentTypeRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     // Mapa de transiciones permitidas por rol
     private static final Map<String, List<String>> ALLOWED_TRANSITIONS_BY_ROLE = new HashMap<>();
@@ -103,23 +109,19 @@ public class StateWorkflowService {
         String userRole = user.getRole() != null ? user.getRole().getName() : null;
         String previousStatus = application.getStatus();
 
-        // Validar que el nuevo estado sea válido según el estado actual
+        // Validaciones
         if (!isValidTransition(previousStatus, newStatus)) {
             throw new RuntimeException(String.format(
                 "Transición inválida de '%s' a '%s'. Transiciones permitidas: %s",
                 previousStatus, newStatus, VALID_TRANSITIONS.getOrDefault(previousStatus, List.of())
             ));
         }
-
-        // Validar que el usuario tenga permiso para hacer esta transición
         if (!isAllowedForRole(userRole, newStatus)) {
             throw new RuntimeException(String.format(
                 "El rol '%s' no tiene permiso para cambiar al estado '%s'",
                 userRole, newStatus
             ));
         }
-
-        // Validar permisos específicos por estado
         validateRolePermission(application, userRole, previousStatus, newStatus);
 
         // Actualizar el estado
@@ -129,8 +131,12 @@ public class StateWorkflowService {
         // Registrar en el historial
         recordStatusChange(applicationId, previousStatus, newStatus, userRole, user, comments);
 
-        log.info("Status changed successfully from {} to {}", previousStatus, newStatus);
+        // Publicar evento
+        applicationEventPublisher.publishEvent(new ApplicationStatusChangedEvent(
+                this, applicationId, previousStatus, newStatus, userId
+        ));
 
+        log.info("Status changed successfully from {} to {}", previousStatus, newStatus);
         return updated;
     }
 
@@ -165,8 +171,29 @@ public class StateWorkflowService {
 
         // No se puede aprobar si faltan documentos requeridos
         if (toStatus.equals(ApplicationStatus.APPROVED.name())) {
-            // TODO: Verificar que tenga todos los documentos requeridos
-            log.warn("Aprobando sin validar documentos requeridos");
+            validateRequiredDocuments(application.getApplicationId());
+        }
+    }
+
+    private void validateRequiredDocuments(String applicationId) {
+        // Obtener tipos de documentos requeridos
+        var requiredTypes = documentTypeRepository.findAll().stream()
+                .filter(dt -> Boolean.TRUE.equals(dt.getIsRequired()))
+                .map(dt -> dt.getDocumentTypeId())
+                .collect(Collectors.toSet());
+
+        if (requiredTypes.isEmpty()) {
+            return; // No hay requeridos configurados
+        }
+
+        var documents = documentRepository.findByApplicationId(applicationId);
+        var providedTypes = documents.stream()
+                .map(d -> d.getDocumentType().getDocumentTypeId())
+                .collect(Collectors.toSet());
+
+        requiredTypes.removeAll(providedTypes);
+        if (!requiredTypes.isEmpty()) {
+            throw new RuntimeException("No se puede aprobar: faltan documentos requeridos");
         }
     }
 

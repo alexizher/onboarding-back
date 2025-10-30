@@ -1,6 +1,7 @@
 package tech.nocountry.onboarding.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,6 +19,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import tech.nocountry.onboarding.security.JwtAuthenticationFilter;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSecurity
@@ -25,6 +28,9 @@ public class SecurityConfig {
 
     @Autowired
     private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @Value("${app.cors.allowed-origins:}")
+    private String allowedOriginsProperty;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -89,22 +95,30 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Permitir frontend Angular (puerto 4200) y localhost para pruebas
-        configuration.setAllowedOrigins(Arrays.asList(
-                "http://localhost:4200", // Frontend Angular
-                "http://127.0.0.1:4200", // Frontend Angular (alternativo)
-                "http://localhost:8080", // Para pruebas directas del backend
-                "http://127.0.0.1:8080" // Para pruebas directas del backend
-        ));
+
+        List<String> defaults = Arrays.asList(
+            "http://localhost:4200",
+            "http://127.0.0.1:4200",
+            "http://localhost:8080",
+            "http://127.0.0.1:8080"
+        );
+        List<String> allowedOrigins = defaults;
+        if (allowedOriginsProperty != null && !allowedOriginsProperty.isBlank()) {
+            allowedOrigins = Arrays.stream(allowedOriginsProperty.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isBlank())
+                    .collect(Collectors.toList());
+        }
+        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList(
-                "Authorization",
-                "Content-Type",
-                "X-Requested-With",
-                "Accept",
-                "Origin",
-                "Access-Control-Request-Method",
-                "Access-Control-Request-Headers"
+            "Authorization",
+            "Content-Type",
+            "X-Requested-With",
+            "Accept",
+            "Origin",
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers"
         ));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
