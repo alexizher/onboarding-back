@@ -8,11 +8,12 @@ import tech.nocountry.onboarding.entities.ApplicationStatusHistory;
 import tech.nocountry.onboarding.entities.CreditApplication;
 import tech.nocountry.onboarding.entities.User;
 import tech.nocountry.onboarding.enums.ApplicationStatus;
-import tech.nocountry.onboarding.modules.applications.dto.StatusChangeRequest;
 import tech.nocountry.onboarding.modules.applications.dto.StatusHistoryResponse;
 import tech.nocountry.onboarding.repositories.ApplicationStatusHistoryRepository;
 import tech.nocountry.onboarding.repositories.CreditApplicationRepository;
 import tech.nocountry.onboarding.repositories.UserRepository;
+import tech.nocountry.onboarding.repositories.DocumentRepository;
+import tech.nocountry.onboarding.repositories.DocumentTypeRepository;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -29,6 +30,8 @@ public class StateWorkflowService {
     private final CreditApplicationRepository applicationRepository;
     private final ApplicationStatusHistoryRepository statusHistoryRepository;
     private final UserRepository userRepository;
+    private final DocumentRepository documentRepository;
+    private final DocumentTypeRepository documentTypeRepository;
 
     // Mapa de transiciones permitidas por rol
     private static final Map<String, List<String>> ALLOWED_TRANSITIONS_BY_ROLE = new HashMap<>();
@@ -119,7 +122,7 @@ public class StateWorkflowService {
             ));
         }
 
-        // Validar permisos específicos por estado
+        // Validar permisos y precondiciones de negocio
         validateRolePermission(application, userRole, previousStatus, newStatus);
 
         // Actualizar el estado
@@ -165,8 +168,29 @@ public class StateWorkflowService {
 
         // No se puede aprobar si faltan documentos requeridos
         if (toStatus.equals(ApplicationStatus.APPROVED.name())) {
-            // TODO: Verificar que tenga todos los documentos requeridos
-            log.warn("Aprobando sin validar documentos requeridos");
+            validateRequiredDocuments(application.getApplicationId());
+        }
+    }
+
+    private void validateRequiredDocuments(String applicationId) {
+        // Obtener tipos de documentos requeridos
+        var requiredTypes = documentTypeRepository.findAll().stream()
+                .filter(dt -> Boolean.TRUE.equals(dt.getIsRequired()))
+                .map(dt -> dt.getDocumentTypeId())
+                .collect(Collectors.toSet());
+
+        if (requiredTypes.isEmpty()) {
+            return; // No hay requeridos configurados
+        }
+
+        var documents = documentRepository.findByApplicationId(applicationId);
+        var providedTypes = documents.stream()
+                .map(d -> d.getDocumentType().getDocumentTypeId())
+                .collect(Collectors.toSet());
+
+        requiredTypes.removeAll(providedTypes);
+        if (!requiredTypes.isEmpty()) {
+            throw new RuntimeException("No se puede aprobar: faltan documentos requeridos");
         }
     }
 
