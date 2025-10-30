@@ -35,6 +35,7 @@ public class StateWorkflowService {
     private final DocumentRepository documentRepository;
     private final DocumentTypeRepository documentTypeRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final tech.nocountry.onboarding.services.AuditLogService auditLogService;
 
     // Mapa de transiciones permitidas por rol
     private static final Map<String, List<String>> ALLOWED_TRANSITIONS_BY_ROLE = new HashMap<>();
@@ -135,6 +136,10 @@ public class StateWorkflowService {
         applicationEventPublisher.publishEvent(new ApplicationStatusChangedEvent(
                 this, applicationId, previousStatus, newStatus, userId
         ));
+
+        // Auditoría
+        auditLogService.record(userId, "APPLICATION_STATUS_CHANGE", null,
+                "Solicitud " + applicationId + ": " + previousStatus + " -> " + newStatus);
 
         log.info("Status changed successfully from {} to {}", previousStatus, newStatus);
         return updated;
