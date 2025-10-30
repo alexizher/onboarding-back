@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
+import lombok.Getter;
+import lombok.Setter;
 
 @Entity
 @Table(name = "users")
@@ -13,12 +15,14 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Getter
+@Setter
 public class User {
     
     @Id
     @Column(name = "user_id", columnDefinition = "VARCHAR(36)")
     private String userId;
-    
+
     // Datos personales
     @Column(name = "full_name", length = 100)
     private String fullName;

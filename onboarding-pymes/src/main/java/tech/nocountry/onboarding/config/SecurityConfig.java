@@ -22,7 +22,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -46,36 +45,49 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .headers(headers -> headers
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(headers -> headers
                 .frameOptions(frameOptions -> frameOptions.deny())
-                .contentTypeOptions(contentTypeOptions -> {})
+                .contentTypeOptions(contentTypeOptions -> {
+                })
                 .httpStrictTransportSecurity(hstsConfig -> hstsConfig
-                    .maxAgeInSeconds(31536000)
+                .maxAgeInSeconds(31536000)
                 )
-            )
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .authorizeHttpRequests(auth -> auth
+                )
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .authorizeHttpRequests(auth -> auth
                 // Endpoints públicos
+                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/test/**").permitAll()
+                .requestMatchers("/h2-console/**").permitAll()
+                // Endpoints protegidos por roles
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/manager/**").hasAnyRole("MANAGER", "ADMIN")
+                .requestMatchers("/api/analyst/**").hasAnyRole("ANALYST", "MANAGER", "ADMIN")
+                .requestMatchers("/api/applicant/**").hasAnyRole("APPLICANT", "ANALYST", "MANAGER", "ADMIN")
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/test/**").permitAll()
                 .requestMatchers("/api/applications/**").permitAll()
                 .requestMatchers("/api/documents/**").permitAll()
                 .requestMatchers("/api/security/password-reset/**").permitAll()
                 .requestMatchers("/api/security/validate-password").permitAll()
-                
                 // Endpoints protegidos por roles
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/manager/**").hasAnyRole("MANAGER", "ADMIN")
                 .requestMatchers("/api/analyst/**").hasAnyRole("ANALYST", "MANAGER", "ADMIN")
                 .requestMatchers("/api/applicant/**").hasAnyRole("APPLICANT", "ANALYST", "MANAGER", "ADMIN")
                 .requestMatchers("/api/security/**").hasAnyRole("APPLICANT", "ANALYST", "MANAGER", "ADMIN")
-                
                 // Cualquier otra petición requiere autenticación
                 .anyRequest().authenticated()
-            )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                // Permitir acceso sin autenticación a TODO
+                //.requestMatchers("/**").permitAll()
+                //.anyRequest().permitAll()
+                )
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        //.headers(headers -> headers
+        //    .frameOptions(frame -> frame.disable())  // Permitir frames de H2
+        //);
 
         return http.build();
     }
@@ -110,10 +122,10 @@ public class SecurityConfig {
         ));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
-        
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
-    
+
 }
