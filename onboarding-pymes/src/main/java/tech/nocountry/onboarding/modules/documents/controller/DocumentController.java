@@ -209,7 +209,24 @@ public class DocumentController {
         
         try {
             log.info("Downloading document: {}", documentId);
-            
+
+            // Validación de propiedad: APPLICANT solo puede descargar sus propios documentos
+            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            if (principal instanceof User user) {
+                String roleName = user.getRole() != null ? user.getRole().getName() : null;
+                if ("APPLICANT".equals(roleName)) {
+                    // Verificar propiedad comparando userId del documento
+                    var doc = documentService.getDocumentById(documentId);
+                    if (!user.getUserId().equals(doc.getUserId())) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                .body(ApiResponse.builder()
+                                        .success(false)
+                                        .message("No tiene permiso para descargar este documento")
+                                        .build());
+                    }
+                }
+            }
+
             var fileInfo = documentService.downloadDocument(documentId);
             
             return ResponseEntity.ok()
