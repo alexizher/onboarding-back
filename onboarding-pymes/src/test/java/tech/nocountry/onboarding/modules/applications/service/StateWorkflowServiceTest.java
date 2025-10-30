@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import tech.nocountry.onboarding.entities.CreditApplication;
 import tech.nocountry.onboarding.entities.User;
 import tech.nocountry.onboarding.repositories.ApplicationStatusHistoryRepository;
@@ -30,6 +31,9 @@ class StateWorkflowServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @InjectMocks
     private StateWorkflowService service;
@@ -64,6 +68,7 @@ class StateWorkflowServiceTest {
 
         assertEquals("UNDER_REVIEW", updated.getStatus());
         verify(statusHistoryRepository, times(1)).save(any());
+        verify(applicationEventPublisher, times(1)).publishEvent(any());
     }
 
     @Test
@@ -81,6 +86,7 @@ class StateWorkflowServiceTest {
         );
         assertTrue(ex.getMessage().contains("Transición inválida"));
         verify(statusHistoryRepository, never()).save(any());
+        verify(applicationEventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -98,6 +104,7 @@ class StateWorkflowServiceTest {
                 service.changeStatus("app-3", "APPROVED", "applicant-id", "Intento no permitido")
         );
         verify(statusHistoryRepository, never()).save(any());
+        verify(applicationEventPublisher, never()).publishEvent(any());
     }
 
     @Test
