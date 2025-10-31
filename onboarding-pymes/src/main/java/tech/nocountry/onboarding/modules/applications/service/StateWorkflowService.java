@@ -93,6 +93,10 @@ public class StateWorkflowService {
         
         VALID_TRANSITIONS.put(ApplicationStatus.CANCELLED.name(), 
             List.of());
+        VALID_TRANSITIONS.put(ApplicationStatus.PENDING.name(), List.of(
+            ApplicationStatus.SUBMITTED.name(),
+            ApplicationStatus.CANCELLED.name()
+        ));
     }
 
     @Transactional
@@ -107,7 +111,11 @@ public class StateWorkflowService {
         User user = userRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        String userRole = user.getRole() != null ? user.getRole().getName() : null;
+        // Normalizar el rol quitando el prefijo "ROLE_" si existe
+        String userRole = user.getRole() != null ? user.getRole().getRoleId() : null;
+        if (userRole != null && userRole.startsWith("ROLE_")) {
+            userRole = userRole.substring(5); // Quitar "ROLE_"
+        }
         String previousStatus = application.getStatus();
 
         // Validaciones
@@ -204,8 +212,10 @@ public class StateWorkflowService {
 
     private void recordStatusChange(String applicationId, String previousStatus, String newStatus, 
                                    String changedByRole, User changedBy, String comments) {
+        CreditApplication application = applicationRepository.findByApplicationId(applicationId)
+            .orElseThrow(() -> new RuntimeException("Solicitud no encontrada para historial"));
         ApplicationStatusHistory history = ApplicationStatusHistory.builder()
-                .application(CreditApplication.builder().applicationId(applicationId).build())
+                .application(application)
                 .previousStatus(previousStatus)
                 .newStatus(newStatus)
                 .changedByRole(changedByRole)
@@ -214,7 +224,11 @@ public class StateWorkflowService {
                 .changedAt(LocalDateTime.now())
                 .build();
 
-        statusHistoryRepository.save(history);
+                try {
+                    statusHistoryRepository.save(history);
+                } catch (Exception e) {
+                    log.error("ERROR al guardar historial de estado", e);
+                }
         log.info("Status history recorded for application: {}", applicationId);
     }
 

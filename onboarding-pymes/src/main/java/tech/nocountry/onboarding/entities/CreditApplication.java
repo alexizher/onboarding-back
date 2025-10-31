@@ -53,7 +53,7 @@ public class CreditApplication {
 
     @Column(name = "status", length = 20)
     @Builder.Default
-    private String status = "pending";
+    private String status = "PENDING";
 
     @Column(name = "company_name", nullable = false, length = 255)
     private String companyName;
@@ -107,7 +107,7 @@ public class CreditApplication {
             applicationId = UUID.randomUUID().toString();
         }
         if (status == null) {
-            status = "pending";
+            status = "PENDING";
         }
         if (acceptTerms == null) {
             acceptTerms = false;

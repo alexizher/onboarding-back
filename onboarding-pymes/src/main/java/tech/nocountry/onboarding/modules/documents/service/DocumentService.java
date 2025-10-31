@@ -282,5 +282,9 @@ public class DocumentService {
                 .verifiedAt(document.getVerifiedAt())
                 .build();
     }
+
+    public List<DocumentType> getAllDocumentTypes() {
+        return documentTypeRepository.findAll();
+    }
 }
 

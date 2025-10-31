@@ -1,6 +1,7 @@
 package tech.nocountry.onboarding.enums;
 
 public enum ApplicationStatus {
+    PENDING("Pendiente"),
     DRAFT("Borrador"),
     SUBMITTED("Enviada"),
     UNDER_REVIEW("En Revisión"),

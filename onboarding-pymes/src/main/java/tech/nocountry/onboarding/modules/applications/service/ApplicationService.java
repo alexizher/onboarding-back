@@ -47,7 +47,7 @@ public class ApplicationService {
                 .monthlyExpenses(request.getMonthlyExpenses())
                 .existingDebt(request.getExistingDebt())
                 .acceptTerms(request.getAcceptTerms())
-                .status("pending")
+                .status("PENDING")
                 .build();
 
         // Cargar entidades relacionadas si se proporcionaron IDs
