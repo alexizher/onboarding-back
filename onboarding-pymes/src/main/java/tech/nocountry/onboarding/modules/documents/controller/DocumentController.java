@@ -13,6 +13,7 @@ import tech.nocountry.onboarding.entities.User;
 import tech.nocountry.onboarding.modules.documents.dto.DocumentResponse;
 import tech.nocountry.onboarding.modules.documents.dto.DocumentUploadRequest;
 import tech.nocountry.onboarding.modules.documents.service.DocumentService;
+import tech.nocountry.onboarding.entities.DocumentType;
 
 import java.util.List;
 import java.util.Map;
@@ -287,6 +288,22 @@ public class DocumentController {
                     .message("Error al eliminar el documento: " + e.getMessage())
                     .build());
         }
+    }
+
+    /**
+     * Listar tipos de documento disponibles (ADMIN y APPLICANT pueden ver)
+     */
+    @GetMapping("/types")
+    @PreAuthorize("hasAnyRole('APPLICANT', 'ANALYST', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<List<DocumentType>>> getDocumentTypes() {
+        List<DocumentType> types = documentService.getAllDocumentTypes();
+        return ResponseEntity.ok(
+            ApiResponse.<List<DocumentType>>builder()
+                .success(true)
+                .message("Tipos de documento disponibles")
+                .data(types)
+                .build()
+        );
     }
 
     /**
