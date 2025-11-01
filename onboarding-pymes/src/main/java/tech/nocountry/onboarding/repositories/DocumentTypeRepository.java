@@ -9,5 +9,6 @@ import java.util.Optional;
 @Repository
 public interface DocumentTypeRepository extends JpaRepository<DocumentType, String> {
     Optional<DocumentType> findByName(String name);
+    boolean existsByName(String name);
 }
 

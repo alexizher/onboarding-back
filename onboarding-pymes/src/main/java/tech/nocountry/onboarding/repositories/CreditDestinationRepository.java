@@ -9,5 +9,6 @@ import java.util.Optional;
 @Repository
 public interface CreditDestinationRepository extends JpaRepository<CreditDestination, String> {
     Optional<CreditDestination> findByName(String name);
+    boolean existsByName(String name);
 }
 
