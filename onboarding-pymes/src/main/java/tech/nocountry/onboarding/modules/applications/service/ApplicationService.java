@@ -2,12 +2,14 @@ package tech.nocountry.onboarding.modules.applications.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tech.nocountry.onboarding.entities.*;
-import tech.nocountry.onboarding.modules.applications.dto.ApplicationRequest;
-import tech.nocountry.onboarding.modules.applications.dto.ApplicationResponse;
-import tech.nocountry.onboarding.modules.applications.dto.ApplicationUpdateRequest;
+import tech.nocountry.onboarding.modules.applications.dto.*;
 import tech.nocountry.onboarding.repositories.*;
 
 import java.util.List;
@@ -195,10 +197,107 @@ public class ApplicationService {
         log.info("Application deleted: {}", applicationId);
     }
 
+    @Transactional(readOnly = true)
+    public PagedApplicationResponse filterApplications(ApplicationFilterRequest filter) {
+        log.info("Filtering applications with filters: {}", filter);
+        
+        // Crear Pageable con ordenamiento
+        Sort sort = Sort.by(
+            "DESC".equalsIgnoreCase(filter.getSortDirection()) 
+                ? Sort.Direction.DESC 
+                : Sort.Direction.ASC,
+            filter.getSortBy()
+        );
+        
+        Pageable pageable = PageRequest.of(filter.getPage(), filter.getSize(), sort);
+        
+        // Llamar al método del repositorio con filtros
+        Page<CreditApplication> page = applicationRepository.findWithFilters(
+            filter.getStatus(),
+            filter.getUserId(),
+            filter.getAssignedToUserId(),
+            filter.getCompanyName(),
+            filter.getCuit(),
+            filter.getCreatedFrom(),
+            filter.getCreatedTo(),
+            filter.getMinAmount(),
+            filter.getMaxAmount(),
+            pageable
+        );
+        
+        // Convertir a PagedApplicationResponse
+        List<ApplicationResponse> content = page.getContent().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+        
+        return PagedApplicationResponse.builder()
+                .content(content)
+                .page(page.getNumber())
+                .size(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .first(page.isFirst())
+                .last(page.isLast())
+                .hasNext(page.hasNext())
+                .hasPrevious(page.hasPrevious())
+                .build();
+    }
+
+    @Transactional
+    public ApplicationResponse assignApplication(String applicationId, String assignedToUserId, String comments) {
+        log.info("Assigning application {} to user {}", applicationId, assignedToUserId);
+        
+        CreditApplication application = applicationRepository.findByApplicationId(applicationId)
+                .orElseThrow(() -> new RuntimeException("Solicitud no encontrada"));
+        
+        if (assignedToUserId != null && !assignedToUserId.isBlank()) {
+            User assignedUser = userRepository.findByUserId(assignedToUserId)
+                    .orElseThrow(() -> new RuntimeException("Usuario asignado no encontrado"));
+            
+            // Validar que el usuario sea un analista
+            if (assignedUser.getRole() == null || 
+                (!assignedUser.getRole().getRoleId().equals("ROLE_ANALYST") && 
+                 !assignedUser.getRole().getRoleId().equals("ROLE_MANAGER") && 
+                 !assignedUser.getRole().getRoleId().equals("ROLE_ADMIN"))) {
+                throw new RuntimeException("El usuario asignado debe ser un analista, manager o admin");
+            }
+            
+            application.setAssignedTo(assignedUser);
+        } else {
+            // Si assignedToUserId es null, quitar la asignación
+            application.setAssignedTo(null);
+        }
+        
+        CreditApplication updated = applicationRepository.save(application);
+        log.info("Application {} assigned to user {}", applicationId, assignedToUserId);
+        
+        return mapToResponse(updated);
+    }
+
     private ApplicationResponse mapToResponse(CreditApplication application) {
+        // Manejar lazy loading del user
+        String userId = null;
+        try {
+            if (application.getUser() != null) {
+                userId = application.getUser().getUserId();
+            }
+        } catch (Exception e) {
+            log.warn("Error al acceder al user de la aplicación {}: {}", application.getApplicationId(), e.getMessage());
+        }
+        
+        // Manejar lazy loading del assignedTo
+        String assignedToUserId = null;
+        try {
+            if (application.getAssignedTo() != null) {
+                assignedToUserId = application.getAssignedTo().getUserId();
+            }
+        } catch (Exception e) {
+            log.warn("Error al acceder al assignedTo de la aplicación {}: {}", application.getApplicationId(), e.getMessage());
+        }
+        
         return ApplicationResponse.builder()
                 .applicationId(application.getApplicationId())
-                .userId(application.getUser().getUserId())
+                .userId(userId)
                 .status(application.getStatus())
                 .companyName(application.getCompanyName())
                 .cuit(application.getCuit())
@@ -214,7 +313,7 @@ public class ApplicationService {
                 .destinationId(application.getDestination() != null ? application.getDestination().getDestinationId() : null)
                 .stateId(application.getState() != null ? application.getState().getStateId() : null)
                 .cityId(application.getCity() != null ? application.getCity().getCityId() : null)
-                .assignedTo(application.getAssignedTo() != null ? application.getAssignedTo().getUserId() : null)
+                .assignedTo(assignedToUserId)
                 .acceptTerms(application.getAcceptTerms())
                 .createdAt(application.getCreatedAt())
                 .updatedAt(application.getUpdatedAt())
