@@ -16,6 +16,7 @@ import tech.nocountry.onboarding.repositories.CreditApplicationRepository;
 import tech.nocountry.onboarding.repositories.UserRepository;
 import tech.nocountry.onboarding.repositories.DocumentRepository;
 import tech.nocountry.onboarding.repositories.DocumentTypeRepository;
+import tech.nocountry.onboarding.repositories.KycVerificationRepository;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -36,6 +37,7 @@ public class StateWorkflowService {
     private final DocumentTypeRepository documentTypeRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final tech.nocountry.onboarding.services.AuditLogService auditLogService;
+    private final KycVerificationRepository kycVerificationRepository; // Opcional para validación KYC
 
     // Mapa de transiciones permitidas por rol
     private static final Map<String, List<String>> ALLOWED_TRANSITIONS_BY_ROLE = new HashMap<>();
@@ -220,6 +222,8 @@ public class StateWorkflowService {
         // No se puede aprobar si faltan documentos requeridos
         if (toStatus.equals(ApplicationStatus.APPROVED.name())) {
             validateRequiredDocuments(application.getApplicationId());
+            // Validar KYC (opcional: verificar si hay verificación KYC requerida)
+            validateKycVerification(application.getApplicationId());
         }
     }
 
@@ -242,6 +246,45 @@ public class StateWorkflowService {
         requiredTypes.removeAll(providedTypes);
         if (!requiredTypes.isEmpty()) {
             throw new RuntimeException("No se puede aprobar: faltan documentos requeridos");
+        }
+    }
+
+    /**
+     * Valida que haya una verificación KYC exitosa antes de aprobar (opcional pero recomendado)
+     */
+    private void validateKycVerification(String applicationId) {
+        try {
+            // Buscar verificación KYC más reciente de tipo IDENTITY o FULL
+            var identityVerification = kycVerificationRepository
+                    .findLatestByApplicationIdAndVerificationType(applicationId, "IDENTITY");
+            var fullVerification = kycVerificationRepository
+                    .findLatestByApplicationIdAndVerificationType(applicationId, "FULL");
+
+            // Si hay alguna verificación, debe estar verificada
+            if (identityVerification.isPresent()) {
+                var verification = identityVerification.get();
+                if (!"verified".equals(verification.getStatus())) {
+                    log.warn("KYC verification for application {} is not verified. Status: {}", 
+                             applicationId, verification.getStatus());
+                    // No fallar, solo advertir - el KYC es opcional pero recomendado
+                } else {
+                    log.info("KYC verification confirmed for application {}", applicationId);
+                }
+            } else if (fullVerification.isPresent()) {
+                var verification = fullVerification.get();
+                if (!"verified".equals(verification.getStatus())) {
+                    log.warn("KYC full verification for application {} is not verified. Status: {}", 
+                             applicationId, verification.getStatus());
+                } else {
+                    log.info("KYC full verification confirmed for application {}", applicationId);
+                }
+            } else {
+                log.info("No KYC verification found for application {}. KYC is optional but recommended.", 
+                         applicationId);
+            }
+        } catch (Exception e) {
+            log.warn("Error validating KYC verification for application {}: {}", applicationId, e.getMessage());
+            // No fallar la aprobación si hay error en la validación KYC
         }
     }
 
