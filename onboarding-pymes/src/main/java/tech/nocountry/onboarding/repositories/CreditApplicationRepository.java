@@ -33,5 +33,9 @@ public interface CreditApplicationRepository extends JpaRepository<CreditApplica
 
     @Query("SELECT COUNT(ca) FROM CreditApplication ca WHERE ca.status = :status")
     long countByStatus(@Param("status") String status);
+
+    // Fetch join para cargar el user junto con la aplicación (evita lazy loading)
+    @Query("SELECT ca FROM CreditApplication ca LEFT JOIN FETCH ca.user WHERE ca.applicationId = :applicationId")
+    Optional<CreditApplication> findByApplicationIdWithUser(@Param("applicationId") String applicationId);
 }
 

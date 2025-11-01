@@ -68,6 +68,7 @@ class StateWorkflowServiceTest {
         CreditApplication app = CreditApplication.builder()
                 .applicationId("app-1")
                 .status("SUBMITTED")
+                .user(applicant)
                 .build();
 
         when(applicationRepository.findByApplicationId("app-1")).thenReturn(Optional.of(app));
