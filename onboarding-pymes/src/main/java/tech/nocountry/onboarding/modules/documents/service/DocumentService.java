@@ -2,15 +2,19 @@ package tech.nocountry.onboarding.modules.documents.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tech.nocountry.onboarding.entities.Document;
 import tech.nocountry.onboarding.entities.DocumentType;
 import tech.nocountry.onboarding.entities.User;
 import tech.nocountry.onboarding.modules.applications.service.ApplicationService;
-import tech.nocountry.onboarding.modules.documents.dto.DocumentResponse;
-import tech.nocountry.onboarding.modules.documents.dto.DocumentUploadRequest;
-import tech.nocountry.onboarding.modules.documents.dto.FileInfo;
+import tech.nocountry.onboarding.modules.documents.dto.*;
+import tech.nocountry.onboarding.modules.documents.events.DocumentVerifiedEvent;
 import tech.nocountry.onboarding.repositories.DocumentRepository;
 import tech.nocountry.onboarding.repositories.DocumentTypeRepository;
 import tech.nocountry.onboarding.repositories.UserRepository;
@@ -21,7 +25,9 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,6 +40,7 @@ public class DocumentService {
     private final UserRepository userRepository;
     private final ApplicationService applicationService;
     private final tech.nocountry.onboarding.services.AuditLogService auditLogService;
+    private final ApplicationEventPublisher applicationEventPublisher;
     
     private static final String UPLOAD_DIR = "uploads/documents/";
     private static final int MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -157,6 +164,44 @@ public class DocumentService {
         auditLogService.record(verifiedByUserId, "DOCUMENT_VERIFY", null,
                 "Verificación documento " + documentId + " -> " + status);
 
+        // Obtener userId del dueño del documento (para notificación SSE)
+        String documentOwnerUserId = null;
+        try {
+            if (updated.getUser() != null) {
+                documentOwnerUserId = updated.getUser().getUserId();
+            }
+        } catch (Exception e) {
+            log.warn("Error al acceder al user del documento {}: {}", documentId, e.getMessage());
+        }
+
+        // Obtener applicationId
+        String applicationId = null;
+        try {
+            if (updated.getApplication() != null) {
+                applicationId = updated.getApplication().getApplicationId();
+            }
+        } catch (Exception e) {
+            log.warn("Error al acceder al application del documento {}: {}", documentId, e.getMessage());
+        }
+
+        // Publicar evento de verificación de documento para notificaciones SSE
+        if (documentOwnerUserId != null && applicationId != null) {
+            try {
+                applicationEventPublisher.publishEvent(new DocumentVerifiedEvent(
+                        this,
+                        documentId,
+                        applicationId,
+                        documentOwnerUserId,
+                        status,
+                        verifiedByUserId
+                ));
+                log.info("DocumentVerifiedEvent publicado - documento: {}, usuario: {}, estado: {}", 
+                         documentId, documentOwnerUserId, status);
+            } catch (Exception e) {
+                log.error("Error al publicar evento de verificación de documento: {}", e.getMessage(), e);
+            }
+        }
+
         return mapToResponse(updated);
     }
 
@@ -265,19 +310,61 @@ public class DocumentService {
     }
 
     private DocumentResponse mapToResponse(Document document) {
+        // Manejar lazy loading del application
+        String applicationId = null;
+        try {
+            if (document.getApplication() != null) {
+                applicationId = document.getApplication().getApplicationId();
+            }
+        } catch (Exception e) {
+            log.warn("Error al acceder al application del documento {}: {}", document.getDocumentId(), e.getMessage());
+        }
+        
+        // Manejar lazy loading del user
+        String userId = null;
+        try {
+            if (document.getUser() != null) {
+                userId = document.getUser().getUserId();
+            }
+        } catch (Exception e) {
+            log.warn("Error al acceder al user del documento {}: {}", document.getDocumentId(), e.getMessage());
+        }
+        
+        // Manejar lazy loading del documentType
+        String documentTypeId = null;
+        String documentTypeName = null;
+        try {
+            if (document.getDocumentType() != null) {
+                documentTypeId = document.getDocumentType().getDocumentTypeId();
+                documentTypeName = document.getDocumentType().getName();
+            }
+        } catch (Exception e) {
+            log.warn("Error al acceder al documentType del documento {}: {}", document.getDocumentId(), e.getMessage());
+        }
+        
+        // Manejar lazy loading del verifiedBy
+        String verifiedByUserId = null;
+        try {
+            if (document.getVerifiedBy() != null) {
+                verifiedByUserId = document.getVerifiedBy().getUserId();
+            }
+        } catch (Exception e) {
+            log.warn("Error al acceder al verifiedBy del documento {}: {}", document.getDocumentId(), e.getMessage());
+        }
+        
         return DocumentResponse.builder()
                 .documentId(document.getDocumentId())
-                .applicationId(document.getApplication().getApplicationId())
-                .userId(document.getUser().getUserId())
-                .documentTypeId(document.getDocumentType().getDocumentTypeId())
-                .documentTypeName(document.getDocumentType().getName())
+                .applicationId(applicationId)
+                .userId(userId)
+                .documentTypeId(documentTypeId)
+                .documentTypeName(documentTypeName)
                 .fileName(document.getFileName())
                 .filePath(document.getFilePath())
                 .fileSize(document.getFileSize())
                 .mimeType(document.getMimeType())
                 .hash(document.getHash())
                 .verificationStatus(document.getVerificationStatus())
-                .verifiedBy(document.getVerifiedBy() != null ? document.getVerifiedBy().getUserId() : null)
+                .verifiedBy(verifiedByUserId)
                 .uploadedAt(document.getUploadedAt())
                 .verifiedAt(document.getVerifiedAt())
                 .build();
@@ -285,6 +372,149 @@ public class DocumentService {
 
     public List<DocumentType> getAllDocumentTypes() {
         return documentTypeRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public PagedDocumentResponse filterDocuments(DocumentFilterRequest filter) {
+        log.info("Filtering documents with request: {}", filter);
+        
+        // Crear Pageable con ordenamiento
+        Sort sort = Sort.by(
+            "DESC".equalsIgnoreCase(filter.getSortDirection()) 
+                ? Sort.Direction.DESC 
+                : Sort.Direction.ASC,
+            filter.getSortBy()
+        );
+        
+        Pageable pageable = PageRequest.of(filter.getPage(), filter.getSize(), sort);
+        
+        // Llamar al método del repositorio con filtros
+        Page<Document> page = documentRepository.findWithFilters(
+            filter.getVerificationStatus(),
+            filter.getDocumentTypeId(),
+            filter.getApplicationId(),
+            filter.getUserId(),
+            filter.getVerifiedByUserId(),
+            filter.getFileName(),
+            filter.getUploadedFrom(),
+            filter.getUploadedTo(),
+            filter.getVerifiedFrom(),
+            filter.getVerifiedTo(),
+            pageable
+        );
+        
+        // Convertir a PagedDocumentResponse
+        List<DocumentResponse> content = page.getContent().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+        
+        return PagedDocumentResponse.builder()
+                .content(content)
+                .page(page.getNumber())
+                .size(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .first(page.isFirst())
+                .last(page.isLast())
+                .hasNext(page.hasNext())
+                .hasPrevious(page.hasPrevious())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public PagedDocumentResponse getPendingDocuments(Integer page, Integer size) {
+        log.info("Getting pending documents - page: {}, size: {}", page, size);
+        
+        Pageable pageable = PageRequest.of(page != null ? page : 0, size != null ? size : 20, 
+                Sort.by(Sort.Direction.DESC, "uploadedAt"));
+        
+        Page<Document> documentPage = documentRepository.findPendingDocuments(pageable);
+        
+        List<DocumentResponse> content = documentPage.getContent().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+        
+        return PagedDocumentResponse.builder()
+                .content(content)
+                .page(documentPage.getNumber())
+                .size(documentPage.getSize())
+                .totalElements(documentPage.getTotalElements())
+                .totalPages(documentPage.getTotalPages())
+                .first(documentPage.isFirst())
+                .last(documentPage.isLast())
+                .hasNext(documentPage.hasNext())
+                .hasPrevious(documentPage.hasPrevious())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getDocumentStatistics() {
+        log.info("Getting document statistics");
+        
+        Map<String, Object> stats = new HashMap<>();
+        
+        // Contar por estado de verificación
+        long pending = documentRepository.countByVerificationStatus("pending");
+        long verified = documentRepository.countByVerificationStatus("verified");
+        long rejected = documentRepository.countByVerificationStatus("rejected");
+        long total = documentRepository.count();
+        
+        stats.put("total", total);
+        stats.put("pending", pending);
+        stats.put("verified", verified);
+        stats.put("rejected", rejected);
+        
+        // Porcentajes
+        if (total > 0) {
+            stats.put("pendingPercentage", (double) pending / total * 100);
+            stats.put("verifiedPercentage", (double) verified / total * 100);
+            stats.put("rejectedPercentage", (double) rejected / total * 100);
+        } else {
+            stats.put("pendingPercentage", 0.0);
+            stats.put("verifiedPercentage", 0.0);
+            stats.put("rejectedPercentage", 0.0);
+        }
+        
+        // Documentos por tipo
+        Map<String, Long> byType = documentRepository.findAll()
+                .stream()
+                .filter(doc -> doc.getDocumentType() != null)
+                .collect(Collectors.groupingBy(
+                    doc -> {
+                        try {
+                            return doc.getDocumentType().getName();
+                        } catch (Exception e) {
+                            return "unknown";
+                        }
+                    },
+                    Collectors.counting()
+                ));
+        stats.put("byType", byType);
+        
+        // Documentos subidos hoy y en el último mes
+        LocalDateTime oneMonthAgo = LocalDateTime.now().minusMonths(1);
+        LocalDateTime today = LocalDateTime.now().toLocalDate().atStartOfDay();
+        LocalDateTime tomorrow = today.plusDays(1);
+        
+        long uploadedLastMonth = documentRepository.findAll()
+                .stream()
+                .filter(doc -> doc.getUploadedAt() != null && doc.getUploadedAt().isAfter(oneMonthAgo))
+                .count();
+        
+        long uploadedToday = documentRepository.findAll()
+                .stream()
+                .filter(doc -> doc.getUploadedAt() != null && 
+                              doc.getUploadedAt().isAfter(today) && 
+                              doc.getUploadedAt().isBefore(tomorrow))
+                .count();
+        
+        stats.put("uploadedLastMonth", uploadedLastMonth);
+        stats.put("uploadedToday", uploadedToday);
+        
+        log.info("Statistics generated: total={}, pending={}, verified={}, rejected={}", 
+                 total, pending, verified, rejected);
+        
+        return stats;
     }
 }
 
