@@ -35,6 +35,7 @@ public class StateWorkflowService {
     private final DocumentRepository documentRepository;
     private final DocumentTypeRepository documentTypeRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final tech.nocountry.onboarding.services.AuditLogService auditLogService;
 
     // Mapa de transiciones permitidas por rol
     private static final Map<String, List<String>> ALLOWED_TRANSITIONS_BY_ROLE = new HashMap<>();
@@ -92,21 +93,34 @@ public class StateWorkflowService {
         
         VALID_TRANSITIONS.put(ApplicationStatus.CANCELLED.name(), 
             List.of());
+        VALID_TRANSITIONS.put(ApplicationStatus.PENDING.name(), List.of(
+            ApplicationStatus.SUBMITTED.name(),
+            ApplicationStatus.CANCELLED.name()
+        ));
     }
 
     @Transactional
     public CreditApplication changeStatus(String applicationId, String newStatus, String userId, String comments) {
         log.info("Changing status for application: {} to: {} by user: {}", applicationId, newStatus, userId);
 
-        // Obtener la aplicación
-        CreditApplication application = applicationRepository.findByApplicationId(applicationId)
-                .orElseThrow(() -> new RuntimeException("Solicitud no encontrada"));
+        // Obtener la aplicación con el user cargado (fetch join para evitar lazy loading)
+        CreditApplication application = applicationRepository.findByApplicationIdWithUser(applicationId)
+                .orElseGet(() -> {
+                    // Fallback a método normal si no se encuentra con fetch join
+                    log.warn("No se encontró aplicación con fetch join, intentando método normal");
+                    return applicationRepository.findByApplicationId(applicationId)
+                            .orElseThrow(() -> new RuntimeException("Solicitud no encontrada"));
+                });
 
         // Obtener el usuario
         User user = userRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        String userRole = user.getRole() != null ? user.getRole().getName() : null;
+        // Normalizar el rol quitando el prefijo "ROLE_" si existe
+        String userRole = user.getRole() != null ? user.getRole().getRoleId() : null;
+        if (userRole != null && userRole.startsWith("ROLE_")) {
+            userRole = userRole.substring(5); // Quitar "ROLE_"
+        }
         String previousStatus = application.getStatus();
 
         // Validaciones
@@ -126,18 +140,52 @@ public class StateWorkflowService {
 
         // Actualizar el estado
         application.setStatus(newStatus);
-        CreditApplication updated = applicationRepository.save(application);
+        applicationRepository.save(application);
+        
+        // Recargar la aplicación con el user cargado (fetch join) para obtener el userId del dueño
+        CreditApplication updatedWithUser = applicationRepository.findByApplicationIdWithUser(applicationId)
+                .orElseGet(() -> {
+                    log.warn("No se encontró aplicación con fetch join, intentando método normal");
+                    return applicationRepository.findByApplicationId(applicationId)
+                            .orElseThrow(() -> new RuntimeException("Solicitud no encontrada después de actualizar"));
+                });
 
         // Registrar en el historial
         recordStatusChange(applicationId, previousStatus, newStatus, userRole, user, comments);
 
+        // Obtener userId del dueño de la aplicación
+        String applicationOwnerUserId;
+        try {
+            if (updatedWithUser.getUser() == null) {
+                log.error("User es null en aplicación {} después de recargar con fetch join", applicationId);
+                throw new RuntimeException("User no disponible en aplicación");
+            }
+            
+            applicationOwnerUserId = updatedWithUser.getUser().getUserId();
+            
+            if (applicationOwnerUserId == null || applicationOwnerUserId.isBlank()) {
+                log.error("UserId del dueño de la aplicación es null o vacío para aplicación {}", applicationId);
+                throw new RuntimeException("UserId del dueño de la aplicación no disponible");
+            }
+            
+            log.info("Publicando evento de cambio de estado - aplicación: {}, dueño: {}, {} -> {}", 
+                     applicationId, applicationOwnerUserId, previousStatus, newStatus);
+        } catch (Exception e) {
+            log.error("Error al obtener userId del dueño de la aplicación {}: {}", applicationId, e.getMessage(), e);
+            throw new RuntimeException("Error al obtener información del dueño de la aplicación", e);
+        }
+
         // Publicar evento
         applicationEventPublisher.publishEvent(new ApplicationStatusChangedEvent(
-                this, applicationId, previousStatus, newStatus, userId
+                this, applicationId, previousStatus, newStatus, applicationOwnerUserId
         ));
 
+        // Auditoría
+        auditLogService.record(userId, "APPLICATION_STATUS_CHANGE", null,
+                "Solicitud " + applicationId + ": " + previousStatus + " -> " + newStatus);
+
         log.info("Status changed successfully from {} to {}", previousStatus, newStatus);
-        return updated;
+        return updatedWithUser;
     }
 
     private boolean isValidTransition(String fromStatus, String toStatus) {
@@ -199,8 +247,10 @@ public class StateWorkflowService {
 
     private void recordStatusChange(String applicationId, String previousStatus, String newStatus, 
                                    String changedByRole, User changedBy, String comments) {
+        CreditApplication application = applicationRepository.findByApplicationId(applicationId)
+            .orElseThrow(() -> new RuntimeException("Solicitud no encontrada para historial"));
         ApplicationStatusHistory history = ApplicationStatusHistory.builder()
-                .application(CreditApplication.builder().applicationId(applicationId).build())
+                .application(application)
                 .previousStatus(previousStatus)
                 .newStatus(newStatus)
                 .changedByRole(changedByRole)
@@ -209,7 +259,11 @@ public class StateWorkflowService {
                 .changedAt(LocalDateTime.now())
                 .build();
 
-        statusHistoryRepository.save(history);
+                try {
+                    statusHistoryRepository.save(history);
+                } catch (Exception e) {
+                    log.error("ERROR al guardar historial de estado", e);
+                }
         log.info("Status history recorded for application: {}", applicationId);
     }
 

@@ -12,6 +12,7 @@ import tech.nocountry.onboarding.entities.User;
 import tech.nocountry.onboarding.repositories.ApplicationStatusHistoryRepository;
 import tech.nocountry.onboarding.repositories.CreditApplicationRepository;
 import tech.nocountry.onboarding.repositories.UserRepository;
+import tech.nocountry.onboarding.services.AuditLogService;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +36,9 @@ class StateWorkflowServiceTest {
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private StateWorkflowService service;
 
@@ -45,11 +49,17 @@ class StateWorkflowServiceTest {
     void setUp() {
         applicant = User.builder()
                 .userId("applicant-id")
-                .role(tech.nocountry.onboarding.entities.Role.builder().name("APPLICANT").build())
+                .role(tech.nocountry.onboarding.entities.Role.builder()
+                        .roleId("ROLE_APPLICANT")
+                        .name("APPLICANT")
+                        .build())
                 .build();
         analyst = User.builder()
                 .userId("analyst-id")
-                .role(tech.nocountry.onboarding.entities.Role.builder().name("ANALYST").build())
+                .role(tech.nocountry.onboarding.entities.Role.builder()
+                        .roleId("ROLE_ANALYST")
+                        .name("ANALYST")
+                        .build())
                 .build();
     }
 
@@ -58,6 +68,7 @@ class StateWorkflowServiceTest {
         CreditApplication app = CreditApplication.builder()
                 .applicationId("app-1")
                 .status("SUBMITTED")
+                .user(applicant)
                 .build();
 
         when(applicationRepository.findByApplicationId("app-1")).thenReturn(Optional.of(app));

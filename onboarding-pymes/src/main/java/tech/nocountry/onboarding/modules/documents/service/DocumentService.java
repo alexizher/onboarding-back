@@ -33,6 +33,7 @@ public class DocumentService {
     private final DocumentTypeRepository documentTypeRepository;
     private final UserRepository userRepository;
     private final ApplicationService applicationService;
+    private final tech.nocountry.onboarding.services.AuditLogService auditLogService;
     
     private static final String UPLOAD_DIR = "uploads/documents/";
     private static final int MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -99,6 +100,8 @@ public class DocumentService {
         // Guardar en BD
         Document saved = documentRepository.save(document);
         log.info("Document uploaded with ID: {}", saved.getDocumentId());
+        auditLogService.record(userId, "DOCUMENT_UPLOAD", null,
+                "Subida documento " + saved.getDocumentId() + " tipo=" + documentType.getName());
 
         return mapToResponse(saved);
     }
@@ -151,6 +154,8 @@ public class DocumentService {
 
         Document updated = documentRepository.save(document);
         log.info("Document verification status updated: {}", updated.getDocumentId());
+        auditLogService.record(verifiedByUserId, "DOCUMENT_VERIFY", null,
+                "Verificación documento " + documentId + " -> " + status);
 
         return mapToResponse(updated);
     }
@@ -205,6 +210,8 @@ public class DocumentService {
         try {
             Path filePath = Paths.get(document.getFilePath());
             byte[] fileBytes = Files.readAllBytes(filePath);
+            auditLogService.record(document.getUser() != null ? document.getUser().getUserId() : null,
+                    "DOCUMENT_DOWNLOAD", null, "Descarga documento " + documentId);
             
             return FileInfo.builder()
                     .fileName(document.getFileName())
@@ -241,6 +248,8 @@ public class DocumentService {
         // Eliminar de la base de datos
         documentRepository.delete(document);
         log.info("Document deleted from database: {}", documentId);
+        auditLogService.record(userId, "DOCUMENT_DELETE", null,
+                "Eliminación documento " + documentId);
     }
 
     private void validateFile(byte[] fileBytes, String mimeType) {
@@ -272,6 +281,10 @@ public class DocumentService {
                 .uploadedAt(document.getUploadedAt())
                 .verifiedAt(document.getVerifiedAt())
                 .build();
+    }
+
+    public List<DocumentType> getAllDocumentTypes() {
+        return documentTypeRepository.findAll();
     }
 }
 

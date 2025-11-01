@@ -68,8 +68,6 @@ public class SecurityConfig {
                 .requestMatchers("/api/applicant/**").hasAnyRole("APPLICANT", "ANALYST", "MANAGER", "ADMIN")
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/test/**").permitAll()
-                .requestMatchers("/api/applications/**").permitAll()
-                .requestMatchers("/api/documents/**").permitAll()
                 .requestMatchers("/api/security/password-reset/**").permitAll()
                 .requestMatchers("/api/security/validate-password").permitAll()
                 // Endpoints protegidos por roles
@@ -77,10 +75,12 @@ public class SecurityConfig {
                 .requestMatchers("/api/manager/**").hasAnyRole("MANAGER", "ADMIN")
                 .requestMatchers("/api/analyst/**").hasAnyRole("ANALYST", "MANAGER", "ADMIN")
                 .requestMatchers("/api/applicant/**").hasAnyRole("APPLICANT", "ANALYST", "MANAGER", "ADMIN")
-                .requestMatchers("/api/security/**").hasAnyRole("APPLICANT", "ANALYST", "MANAGER", "ADMIN")
+                    .requestMatchers("/api/security/**").hasAnyRole("APPLICANT", "ANALYST", "MANAGER", "ADMIN")
+                    // Notificaciones SSE: permitir acceso con token en query param o por header Authorization
+                    .requestMatchers("/api/notifications/stream").permitAll()
                 // Cualquier otra petición requiere autenticación
                 .anyRequest().authenticated()
-                // Permitir acceso sin autenticación a TODO
+                // Permitir acceso sin autenticación
                 //.requestMatchers("/**").permitAll()
                 //.anyRequest().permitAll()
                 )
