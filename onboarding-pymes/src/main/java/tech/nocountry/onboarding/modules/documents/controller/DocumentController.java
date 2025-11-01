@@ -10,8 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import tech.nocountry.onboarding.dto.ApiResponse;
 import tech.nocountry.onboarding.entities.User;
-import tech.nocountry.onboarding.modules.documents.dto.DocumentResponse;
-import tech.nocountry.onboarding.modules.documents.dto.DocumentUploadRequest;
+import tech.nocountry.onboarding.modules.documents.dto.*;
 import tech.nocountry.onboarding.modules.documents.service.DocumentService;
 import tech.nocountry.onboarding.entities.DocumentType;
 
@@ -304,6 +303,99 @@ public class DocumentController {
                 .data(types)
                 .build()
         );
+    }
+
+    /**
+     * Filtrar documentos con paginación (Panel de analistas)
+     */
+    @PostMapping("/filter")
+    @PreAuthorize("hasAnyRole('ANALYST', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<PagedDocumentResponse>> filterDocuments(
+            @Valid @RequestBody DocumentFilterRequest filter) {
+        
+        try {
+            log.info("Filtering documents with request: {}", filter);
+            
+            PagedDocumentResponse response = documentService.filterDocuments(filter);
+            
+            return ResponseEntity.ok(
+                ApiResponse.<PagedDocumentResponse>builder()
+                    .success(true)
+                    .message("Documentos filtrados exitosamente")
+                    .data(response)
+                    .build()
+            );
+            
+        } catch (Exception e) {
+            log.error("Error filtering documents", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.<PagedDocumentResponse>builder()
+                    .success(false)
+                    .message("Error al filtrar los documentos: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    /**
+     * Obtener documentos pendientes de verificación
+     */
+    @GetMapping("/pending")
+    @PreAuthorize("hasAnyRole('ANALYST', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<PagedDocumentResponse>> getPendingDocuments(
+            @RequestParam(required = false, defaultValue = "0") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer size) {
+        
+        try {
+            log.info("Getting pending documents - page: {}, size: {}", page, size);
+            
+            PagedDocumentResponse response = documentService.getPendingDocuments(page, size);
+            
+            return ResponseEntity.ok(
+                ApiResponse.<PagedDocumentResponse>builder()
+                    .success(true)
+                    .message("Documentos pendientes obtenidos exitosamente")
+                    .data(response)
+                    .build()
+            );
+            
+        } catch (Exception e) {
+            log.error("Error getting pending documents", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.<PagedDocumentResponse>builder()
+                    .success(false)
+                    .message("Error al obtener los documentos pendientes: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    /**
+     * Obtener estadísticas de documentos
+     */
+    @GetMapping("/statistics")
+    @PreAuthorize("hasAnyRole('ANALYST', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getDocumentStatistics() {
+        
+        try {
+            log.info("Getting document statistics");
+            
+            Map<String, Object> statistics = documentService.getDocumentStatistics();
+            
+            return ResponseEntity.ok(
+                ApiResponse.<Map<String, Object>>builder()
+                    .success(true)
+                    .message("Estadísticas obtenidas exitosamente")
+                    .data(statistics)
+                    .build()
+            );
+            
+        } catch (Exception e) {
+            log.error("Error getting document statistics", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.<Map<String, Object>>builder()
+                    .success(false)
+                    .message("Error al obtener las estadísticas: " + e.getMessage())
+                    .build());
+        }
     }
 
     /**
