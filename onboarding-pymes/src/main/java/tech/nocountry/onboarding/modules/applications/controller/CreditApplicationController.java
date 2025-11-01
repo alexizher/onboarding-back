@@ -10,11 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import tech.nocountry.onboarding.dto.ApiResponse;
 import tech.nocountry.onboarding.entities.User;
-import tech.nocountry.onboarding.modules.applications.dto.ApplicationRequest;
-import tech.nocountry.onboarding.modules.applications.dto.ApplicationResponse;
-import tech.nocountry.onboarding.modules.applications.dto.ApplicationUpdateRequest;
-import tech.nocountry.onboarding.modules.applications.dto.StatusChangeRequest;
-import tech.nocountry.onboarding.modules.applications.dto.StatusHistoryResponse;
+import tech.nocountry.onboarding.modules.applications.dto.*;
 import tech.nocountry.onboarding.modules.applications.service.ApplicationService;
 import tech.nocountry.onboarding.modules.applications.service.StateWorkflowService;
 
@@ -350,6 +346,80 @@ public class CreditApplicationController {
                 .body(ApiResponse.<List<String>>builder()
                     .success(false)
                     .message("Error al obtener las transiciones: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    /**
+     * Filtrar aplicaciones con paginación (Panel de operadores/analistas)
+     */
+    @PostMapping("/filter")
+    @PreAuthorize("hasAnyRole('ANALYST', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<PagedApplicationResponse>> filterApplications(
+            @Valid @RequestBody ApplicationFilterRequest filter) {
+        
+        try {
+            log.info("Filtering applications with request: {}", filter);
+            
+            PagedApplicationResponse response = applicationService.filterApplications(filter);
+            
+            return ResponseEntity.ok(
+                ApiResponse.<PagedApplicationResponse>builder()
+                    .success(true)
+                    .message("Solicitudes filtradas exitosamente")
+                    .data(response)
+                    .build()
+            );
+            
+        } catch (Exception e) {
+            log.error("Error filtering applications", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.<PagedApplicationResponse>builder()
+                    .success(false)
+                    .message("Error al filtrar las solicitudes: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    /**
+     * Asignar una solicitud a un analista
+     */
+    @PostMapping("/assign")
+    @PreAuthorize("hasAnyRole('ANALYST', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<ApplicationResponse>> assignApplication(
+            @Valid @RequestBody ApplicationAssignmentRequest request) {
+        
+        try {
+            String currentUserId = getCurrentUserId();
+            log.info("Assigning application {} to user {} by {}", 
+                    request.getApplicationId(), request.getAssignedToUserId(), currentUserId);
+            
+            ApplicationResponse response = applicationService.assignApplication(
+                    request.getApplicationId(), 
+                    request.getAssignedToUserId(),
+                    request.getComments());
+            
+            return ResponseEntity.ok(
+                ApiResponse.<ApplicationResponse>builder()
+                    .success(true)
+                    .message("Solicitud asignada exitosamente")
+                    .data(response)
+                    .build()
+            );
+            
+        } catch (RuntimeException e) {
+            log.error("Error assigning application: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.<ApplicationResponse>builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build());
+        } catch (Exception e) {
+            log.error("Error assigning application", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.<ApplicationResponse>builder()
+                    .success(false)
+                    .message("Error al asignar la solicitud: " + e.getMessage())
                     .build());
         }
     }
