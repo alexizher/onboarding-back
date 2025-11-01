@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tech.nocountry.onboarding.entities.*;
 import tech.nocountry.onboarding.modules.applications.dto.*;
+import tech.nocountry.onboarding.modules.risk.service.RiskAssessmentService;
 import tech.nocountry.onboarding.repositories.*;
 
 import java.util.List;
@@ -27,6 +28,7 @@ public class ApplicationService {
     private final CreditDestinationRepository destinationRepository;
     private final ApplicationStateRepository stateRepository;
     private final CityRepository cityRepository;
+    private final RiskAssessmentService riskAssessmentService;
 
     @Transactional
     public ApplicationResponse createApplication(String userId, ApplicationRequest request) {
@@ -81,6 +83,16 @@ public class ApplicationService {
         // Guardar la solicitud
         CreditApplication saved = applicationRepository.save(application);
         log.info("Application created with ID: {}", saved.getApplicationId());
+
+        // Calcular evaluación de riesgo automáticamente
+        try {
+            riskAssessmentService.assessRiskAutomatically(saved.getApplicationId());
+            log.info("Risk assessment calculated automatically for application: {}", saved.getApplicationId());
+        } catch (Exception e) {
+            log.warn("Error calculating risk assessment automatically for application {}: {}", 
+                     saved.getApplicationId(), e.getMessage());
+            // No fallar la creación si el cálculo de riesgo falla
+        }
 
         return mapToResponse(saved);
     }
@@ -182,6 +194,24 @@ public class ApplicationService {
 
         CreditApplication updated = applicationRepository.save(application);
         log.info("Application updated: {}", updated.getApplicationId());
+
+        // Recalcular evaluación de riesgo automáticamente si cambió información relevante
+        boolean shouldRecalculate = request.getAmountRequested() != null || 
+                                    request.getMonthlyIncome() != null ||
+                                    request.getMonthlyExpenses() != null ||
+                                    request.getExistingDebt() != null ||
+                                    request.getCategoryId() != null;
+        
+        if (shouldRecalculate) {
+            try {
+                riskAssessmentService.assessRiskAutomatically(updated.getApplicationId());
+                log.info("Risk assessment recalculated automatically for application: {}", updated.getApplicationId());
+            } catch (Exception e) {
+                log.warn("Error recalculating risk assessment automatically for application {}: {}", 
+                         updated.getApplicationId(), e.getMessage());
+                // No fallar la actualización si el cálculo de riesgo falla
+            }
+        }
 
         return mapToResponse(updated);
     }
