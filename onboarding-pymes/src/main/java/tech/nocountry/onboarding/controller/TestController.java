@@ -13,11 +13,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import tech.nocountry.onboarding.dto.RoleDTO;
-import tech.nocountry.onboarding.dto.UserDTO;
+import tech.nocountry.onboarding.modules.users.dto.UserResponse;
+import tech.nocountry.onboarding.modules.users.service.UserManagementService;
 import tech.nocountry.onboarding.entities.Role;
-import tech.nocountry.onboarding.entities.User;
 import tech.nocountry.onboarding.services.RoleService;
-import tech.nocountry.onboarding.services.UserService;
 
 @RestController
 @RequestMapping("/api/test")
@@ -25,12 +24,14 @@ import tech.nocountry.onboarding.services.UserService;
 public class TestController {
     
     private final JdbcTemplate jdbcTemplate;
-    private final UserService userService;
     private final RoleService roleService;
+    private final UserManagementService userManagementService;
 
-    public TestController(UserService userService, RoleService roleService,JdbcTemplate jdbcTemplate) {
-        this.userService = userService;
+    public TestController(RoleService roleService, 
+                         UserManagementService userManagementService,
+                         JdbcTemplate jdbcTemplate) {
         this.roleService = roleService;
+        this.userManagementService = userManagementService;
         this.jdbcTemplate = jdbcTemplate;
     }
     
@@ -74,14 +75,11 @@ public class TestController {
         Map<String, Object> response = new HashMap<>();
 
         try {
-            List<User> users = userService.findAllActiveUsers();
-            List<UserDTO> userDTOs = users.stream()
-                .map(UserDTO::new)
-                .collect(Collectors.toList());
+            List<UserResponse> users = userManagementService.getActiveUsers();
             response.put("status", "OK");
             response.put("message", "Usuarios obtenidos correctamente");
-            response.put("count", userDTOs.size());
-            response.put("data", userDTOs);
+            response.put("count", users.size());
+            response.put("data", users);
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
