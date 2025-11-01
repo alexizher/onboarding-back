@@ -320,12 +320,86 @@ public class StateWorkflowService {
     public Map<String, Object> getStatusStatistics() {
         Map<String, Object> stats = new HashMap<>();
         
+        // Contar solicitudes por estado actual
+        Map<String, Long> statusCounts = new HashMap<>();
         ApplicationStatus[] statuses = ApplicationStatus.values();
         for (ApplicationStatus status : statuses) {
             String statusName = status.name();
-            long count = statusHistoryRepository.countByStatus(statusName);
-            stats.put(statusName, count);
+            long count = applicationRepository.countByStatus(statusName);
+            statusCounts.put(statusName, count);
         }
+        stats.put("byStatus", statusCounts);
+        
+        // Estadísticas generales
+        long totalApplications = applicationRepository.count();
+        long assignedApplications = applicationRepository.findAll()
+                .stream()
+                .filter(app -> app.getAssignedTo() != null)
+                .count();
+        long unassignedApplications = totalApplications - assignedApplications;
+        
+        stats.put("total", totalApplications);
+        stats.put("assigned", assignedApplications);
+        stats.put("unassigned", unassignedApplications);
+        
+        // Solicitudes por analista
+        Map<String, Long> byAnalyst = applicationRepository.findAll()
+                .stream()
+                .filter(app -> app.getAssignedTo() != null)
+                .collect(Collectors.groupingBy(
+                    app -> {
+                        try {
+                            return app.getAssignedTo().getUserId();
+                        } catch (Exception e) {
+                            return "unknown";
+                        }
+                    },
+                    Collectors.counting()
+                ));
+        stats.put("byAnalyst", byAnalyst);
+        
+        // Solicitudes creadas en el último mes y hoy
+        java.time.LocalDateTime oneMonthAgo = java.time.LocalDateTime.now().minusMonths(1);
+        java.time.LocalDateTime today = java.time.LocalDateTime.now().toLocalDate().atStartOfDay();
+        java.time.LocalDateTime tomorrow = today.plusDays(1);
+        
+        long createdLastMonth = applicationRepository.findAll()
+                .stream()
+                .filter(app -> app.getCreatedAt() != null && app.getCreatedAt().isAfter(oneMonthAgo))
+                .count();
+        
+        long createdToday = applicationRepository.findAll()
+                .stream()
+                .filter(app -> app.getCreatedAt() != null && 
+                              app.getCreatedAt().isAfter(today) && 
+                              app.getCreatedAt().isBefore(tomorrow))
+                .count();
+        
+        stats.put("createdLastMonth", createdLastMonth);
+        stats.put("createdToday", createdToday);
+        
+        // Monto total solicitado
+        java.math.BigDecimal totalAmount = applicationRepository.findAll()
+                .stream()
+                .map(app -> app.getAmountRequested() != null ? app.getAmountRequested() : java.math.BigDecimal.ZERO)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+        
+        stats.put("totalAmountRequested", totalAmount);
+        
+        // Promedio de monto solicitado
+        if (totalApplications > 0) {
+            java.math.BigDecimal avgAmount = totalAmount.divide(
+                java.math.BigDecimal.valueOf(totalApplications), 
+                2, 
+                java.math.RoundingMode.HALF_UP
+            );
+            stats.put("averageAmountRequested", avgAmount);
+        } else {
+            stats.put("averageAmountRequested", java.math.BigDecimal.ZERO);
+        }
+        
+        log.info("Statistics generated: total={}, assigned={}, unassigned={}", 
+                 totalApplications, assignedApplications, unassignedApplications);
         
         return stats;
     }
