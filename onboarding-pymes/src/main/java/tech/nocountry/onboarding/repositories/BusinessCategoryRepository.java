@@ -9,5 +9,6 @@ import java.util.Optional;
 @Repository
 public interface BusinessCategoryRepository extends JpaRepository<BusinessCategory, String> {
     Optional<BusinessCategory> findByName(String name);
+    boolean existsByName(String name);
 }
 
