@@ -1,6 +1,7 @@
 package tech.nocountry.onboarding.repositories;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -25,10 +26,20 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     List<PasswordResetToken> findExpiredTokens(@Param("now") LocalDateTime now);
     
     // Marcar token como usado
+    @Modifying
     @Query("UPDATE PasswordResetToken t SET t.used = true WHERE t.token = :token")
     void markTokenAsUsed(@Param("token") String token);
     
     // Invalidar todos los tokens de un usuario
+    @Modifying
     @Query("UPDATE PasswordResetToken t SET t.used = true WHERE t.userId = :userId AND t.used = false")
     void invalidateAllUserTokens(@Param("userId") String userId);
+    
+    // Buscar tokens bloqueados
+    @Query("SELECT t FROM PasswordResetToken t WHERE t.isBlocked = true AND t.expiresAt > :now")
+    List<PasswordResetToken> findBlockedTokens(@Param("now") LocalDateTime now);
+    
+    // Buscar tokens en cooldown
+    @Query("SELECT t FROM PasswordResetToken t WHERE t.cooldownUntil > :now")
+    List<PasswordResetToken> findTokensInCooldown(@Param("now") LocalDateTime now);
 }

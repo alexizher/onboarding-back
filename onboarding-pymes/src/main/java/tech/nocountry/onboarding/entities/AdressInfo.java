@@ -3,8 +3,8 @@ package tech.nocountry.onboarding.entities;
 import jakarta.persistence.*;
 import lombok.Data;
 
-@Entity
-@Table(name = "address_info")
+// @Entity - DESHABILITADO: Esta entidad no se usa en el sistema actual
+// @Table(name = "address_info")
 @Data
 public class AdressInfo {
     @Id

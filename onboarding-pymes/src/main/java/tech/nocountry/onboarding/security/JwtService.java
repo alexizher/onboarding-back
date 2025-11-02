@@ -2,14 +2,18 @@ package tech.nocountry.onboarding.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import tech.nocountry.onboarding.entities.TokenBlacklist;
 import tech.nocountry.onboarding.entities.User;
+import tech.nocountry.onboarding.repositories.TokenBlacklistRepository;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class JwtService {
@@ -19,6 +23,9 @@ public class JwtService {
 
     @Value("${jwt.expiration:86400000}") // 24 horas
     private long expiration;
+
+    @Autowired
+    private TokenBlacklistRepository tokenBlacklistRepository;
 
     private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(secret.getBytes());
@@ -36,13 +43,29 @@ public class JwtService {
     }
 
     private String createToken(Map<String, Object> claims, String subject) {
+        // Generar JWT ID único para tracking y blacklisting
+        String jti = UUID.randomUUID().toString();
+        claims.put("jti", jti);
+        
         return Jwts.builder()
+                .id(jti) // JWT ID para blacklisting
                 .claims(claims)
                 .subject(subject)
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getSigningKey())
                 .compact();
+    }
+
+    /**
+     * Extraer JWT ID del token
+     */
+    public String extractJti(String token) {
+        try {
+            return extractClaim(token, Claims::getId);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public String extractUsername(String token) {
@@ -83,7 +106,8 @@ public class JwtService {
             final String extractedUsername = extractUsername(token);
             return (extractedUsername != null && 
                    extractedUsername.equals(username) && 
-                   !isTokenExpired(token));
+                   !isTokenExpired(token) &&
+                   !isTokenBlacklisted(token)); // Verificar blacklist
         } catch (Exception e) {
             return false;
         }
@@ -94,7 +118,52 @@ public class JwtService {
      */
     public Boolean validateToken(String token) {
         try {
-            return !isTokenExpired(token);
+            // Verificar si el token está expirado
+            if (isTokenExpired(token)) {
+                return false;
+            }
+            
+            // Verificar si el token está en la blacklist
+            String jti = extractJti(token);
+            if (jti != null && tokenBlacklistRepository.existsByJti(jti)) {
+                return false;
+            }
+            
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Agregar token a la blacklist
+     */
+    public void blacklistToken(String token, String userId, String reason) {
+        try {
+            String jti = extractJti(token);
+            if (jti != null) {
+                TokenBlacklist blacklistEntry = TokenBlacklist.builder()
+                        .tokenId(UUID.randomUUID().toString())
+                        .jti(jti)
+                        .userId(userId)
+                        .reason(reason)
+                        .build();
+                
+                tokenBlacklistRepository.save(blacklistEntry);
+            }
+        } catch (Exception e) {
+            // Log error pero no fallar
+            System.err.println("Error al agregar token a blacklist: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Verificar si un token está en la blacklist
+     */
+    public boolean isTokenBlacklisted(String token) {
+        try {
+            String jti = extractJti(token);
+            return jti != null && tokenBlacklistRepository.existsByJti(jti);
         } catch (Exception e) {
             return false;
         }

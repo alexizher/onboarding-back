@@ -129,6 +129,132 @@ public class CreditApplicationController {
     }
 
     /**
+     * Guardar o actualizar una solicitud como borrador (DRAFT)
+     * Permite guardar formularios incompletos sin validaciones obligatorias
+     */
+    @PostMapping("/draft")
+    @PreAuthorize("hasRole('APPLICANT')")
+    public ResponseEntity<ApiResponse<ApplicationResponse>> saveDraft(
+            @Valid @RequestBody ApplicationDraftRequest request,
+            @RequestParam(required = false) String applicationId) {
+        
+        try {
+            String userId = getCurrentUserId();
+            log.info("Saving draft for user: {}, applicationId: {}", userId, applicationId);
+            
+            ApplicationResponse response = applicationService.saveDraft(userId, request, applicationId);
+            
+            return ResponseEntity.ok(
+                ApiResponse.<ApplicationResponse>builder()
+                    .success(true)
+                    .message("Borrador guardado exitosamente")
+                    .data(response)
+                    .build()
+            );
+            
+        } catch (RuntimeException e) {
+            log.error("Error saving draft: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.<ApplicationResponse>builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build());
+        } catch (Exception e) {
+            log.error("Error saving draft", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.<ApplicationResponse>builder()
+                    .success(false)
+                    .message("Error al guardar el borrador: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    /**
+     * Obtener todos los borradores (DRAFT) del usuario actual
+     */
+    @GetMapping("/my-drafts")
+    @PreAuthorize("hasRole('APPLICANT')")
+    public ResponseEntity<ApiResponse<List<ApplicationResponse>>> getMyDrafts() {
+        
+        try {
+            String userId = getCurrentUserId();
+            log.info("Getting drafts for user: {}", userId);
+            
+            List<ApplicationResponse> drafts = applicationService.getMyDrafts(userId);
+            
+            return ResponseEntity.ok(
+                ApiResponse.<List<ApplicationResponse>>builder()
+                    .success(true)
+                    .message("Borradores obtenidos exitosamente")
+                    .data(drafts)
+                    .build()
+            );
+            
+        } catch (Exception e) {
+            log.error("Error getting drafts", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.<List<ApplicationResponse>>builder()
+                    .success(false)
+                    .message("Error al obtener los borradores: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    /**
+     * Finalizar un borrador: cambiar de DRAFT a SUBMITTED
+     * Valida que todos los campos obligatorios estén completos
+     */
+    @PutMapping("/{applicationId}/complete")
+    @PreAuthorize("hasRole('APPLICANT')")
+    public ResponseEntity<ApiResponse<ApplicationResponse>> completeDraft(
+            @PathVariable String applicationId,
+            @RequestBody(required = false) Map<String, String> body) {
+        
+        try {
+            String userId = getCurrentUserId();
+            log.info("Completing draft: {} for user: {}", applicationId, userId);
+            
+            // Validar que todos los campos obligatorios estén completos
+            applicationService.completeDraft(applicationId, userId);
+            
+            // Cambiar estado de DRAFT a SUBMITTED usando StateWorkflowService
+            String comments = body != null ? body.get("comments") : null;
+            stateWorkflowService.changeStatus(
+                applicationId, 
+                "SUBMITTED", 
+                userId, 
+                comments != null ? comments : "Borrador completado y enviado"
+            );
+            
+            // Obtener la aplicación actualizada con el nuevo estado
+            ApplicationResponse response = applicationService.getApplicationById(applicationId);
+            
+            return ResponseEntity.ok(
+                ApiResponse.<ApplicationResponse>builder()
+                    .success(true)
+                    .message("Borrador completado y enviado exitosamente")
+                    .data(response)
+                    .build()
+            );
+            
+        } catch (RuntimeException e) {
+            log.error("Error completing draft: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.<ApplicationResponse>builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build());
+        } catch (Exception e) {
+            log.error("Error completing draft", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.<ApplicationResponse>builder()
+                    .success(false)
+                    .message("Error al completar el borrador: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    /**
      * Obtener todas las solicitudes por estado (solo para analistas y admins)
      */
     @GetMapping("/status/{status}")

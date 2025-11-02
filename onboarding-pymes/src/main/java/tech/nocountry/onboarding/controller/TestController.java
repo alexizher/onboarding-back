@@ -13,9 +13,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import tech.nocountry.onboarding.dto.RoleDTO;
-import tech.nocountry.onboarding.dto.UserDTO;
 import tech.nocountry.onboarding.entities.Role;
 import tech.nocountry.onboarding.entities.User;
+import tech.nocountry.onboarding.modules.users.dto.UserResponse;
 import tech.nocountry.onboarding.services.RoleService;
 import tech.nocountry.onboarding.services.UserService;
 
@@ -75,13 +75,13 @@ public class TestController {
 
         try {
             List<User> users = userService.findAllActiveUsers();
-            List<UserDTO> userDTOs = users.stream()
-                .map(UserDTO::new)
+            List<UserResponse> userResponses = users.stream()
+                .map(this::mapToResponse)
                 .collect(Collectors.toList());
             response.put("status", "OK");
             response.put("message", "Usuarios obtenidos correctamente");
-            response.put("count", userDTOs.size());
-            response.put("data", userDTOs);
+            response.put("count", userResponses.size());
+            response.put("data", userResponses);
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
@@ -114,5 +114,35 @@ public class TestController {
             response.put("error", e.getMessage());
             return ResponseEntity.internalServerError().body(response);
         }
+    }
+    
+    // Método helper para convertir User a UserResponse
+    private UserResponse mapToResponse(User user) {
+        String roleId = null;
+        String roleName = null;
+        try {
+            if (user.getRole() != null) {
+                roleId = user.getRole().getRoleId();
+                roleName = user.getRole().getName();
+            }
+        } catch (Exception e) {
+            // Log warning si hay error accediendo al rol
+        }
+        
+        return UserResponse.builder()
+                .userId(user.getUserId())
+                .fullName(user.getFullName())
+                .dni(user.getDni())
+                .phone(user.getPhone())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .isActive(user.getIsActive())
+                .consentGdpr(user.getConsentGdpr())
+                .roleId(roleId)
+                .roleName(roleName)
+                .createdAt(user.getCreatedAt())
+                .updatedAt(user.getUpdatedAt())
+                .lastLogin(user.getLastLogin())
+                .build();
     }
 }
