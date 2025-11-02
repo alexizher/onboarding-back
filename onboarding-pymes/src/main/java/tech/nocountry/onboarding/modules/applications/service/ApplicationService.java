@@ -9,6 +9,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tech.nocountry.onboarding.entities.*;
+import tech.nocountry.onboarding.enums.ApplicationStatus;
 import tech.nocountry.onboarding.modules.applications.dto.*;
 import tech.nocountry.onboarding.modules.risk.service.RiskAssessmentService;
 import tech.nocountry.onboarding.repositories.*;
@@ -302,6 +303,190 @@ public class ApplicationService {
         log.info("Application {} assigned to user {}", applicationId, assignedToUserId);
         
         return mapToResponse(updated);
+    }
+
+    /**
+     * Guardar o actualizar una solicitud como borrador (DRAFT)
+     * Permite guardar formularios incompletos sin validaciones obligatorias
+     */
+    @Transactional
+    public ApplicationResponse saveDraft(String userId, ApplicationDraftRequest request, String applicationId) {
+        log.info("Saving draft for user: {}, applicationId: {}", userId, applicationId);
+
+        // Validar que el usuario existe
+        User user = userRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        CreditApplication application;
+
+        // Si se proporciona un applicationId, intentar actualizar el borrador existente
+        if (applicationId != null && !applicationId.isBlank()) {
+            application = applicationRepository.findByApplicationId(applicationId)
+                    .orElseThrow(() -> new RuntimeException("Solicitud no encontrada"));
+
+            // Validar que la solicitud pertenece al usuario
+            if (!application.getUser().getUserId().equals(userId)) {
+                throw new RuntimeException("No tiene permiso para modificar esta solicitud");
+            }
+
+            // Validar que está en estado DRAFT
+            if (!ApplicationStatus.DRAFT.name().equals(application.getStatus())) {
+                throw new RuntimeException("Solo se pueden editar solicitudes en estado DRAFT");
+            }
+
+            log.info("Updating existing draft: {}", applicationId);
+        } else {
+            // Crear nueva solicitud en estado DRAFT
+            application = CreditApplication.builder()
+                    .user(user)
+                    .status(ApplicationStatus.DRAFT.name())
+                    .build();
+            log.info("Creating new draft");
+        }
+
+        // Actualizar campos solo si se proporcionan (permitir parcial)
+        if (request.getCompanyName() != null) {
+            application.setCompanyName(request.getCompanyName());
+        }
+        if (request.getCuit() != null) {
+            application.setCuit(request.getCuit());
+        }
+        if (request.getCompanyAddress() != null) {
+            application.setCompanyAddress(request.getCompanyAddress());
+        }
+        if (request.getAmountRequested() != null) {
+            application.setAmountRequested(request.getAmountRequested());
+        }
+        if (request.getPurpose() != null) {
+            application.setPurpose(request.getPurpose());
+        }
+        if (request.getCreditMonths() != null) {
+            application.setCreditMonths(request.getCreditMonths());
+        }
+        if (request.getMonthlyIncome() != null) {
+            application.setMonthlyIncome(request.getMonthlyIncome());
+        }
+        if (request.getMonthlyExpenses() != null) {
+            application.setMonthlyExpenses(request.getMonthlyExpenses());
+        }
+        if (request.getExistingDebt() != null) {
+            application.setExistingDebt(request.getExistingDebt());
+        }
+        if (request.getAcceptTerms() != null) {
+            application.setAcceptTerms(request.getAcceptTerms());
+        }
+
+        // Actualizar relaciones si se proporcionaron
+        if (request.getCategoryId() != null) {
+            categoryRepository.findById(request.getCategoryId())
+                    .ifPresent(application::setCategory);
+        }
+        if (request.getProfessionId() != null) {
+            professionRepository.findById(request.getProfessionId())
+                    .ifPresent(application::setProfession);
+        }
+        if (request.getDestinationId() != null) {
+            destinationRepository.findById(request.getDestinationId())
+                    .ifPresent(application::setDestination);
+        }
+        if (request.getStateId() != null) {
+            stateRepository.findById(request.getStateId())
+                    .ifPresent(application::setState);
+        }
+        if (request.getCityId() != null) {
+            cityRepository.findById(request.getCityId())
+                    .ifPresent(application::setCity);
+        }
+
+        // Asegurar que el estado sea DRAFT
+        application.setStatus(ApplicationStatus.DRAFT.name());
+
+        CreditApplication saved = applicationRepository.save(application);
+        log.info("Draft saved with ID: {}", saved.getApplicationId());
+
+        // No calcular riesgo automáticamente para borradores incompletos
+        // El riesgo se calculará cuando se complete el borrador
+
+        return mapToResponse(saved);
+    }
+
+    /**
+     * Obtener todos los borradores (DRAFT) del usuario actual
+     */
+    @Transactional(readOnly = true)
+    public List<ApplicationResponse> getMyDrafts(String userId) {
+        log.info("Getting drafts for user: {}", userId);
+
+        List<CreditApplication> drafts = applicationRepository.findByUserIdAndStatus(
+                userId, ApplicationStatus.DRAFT.name());
+
+        return drafts.stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Finalizar un borrador: cambiar de DRAFT a SUBMITTED
+     * Valida que todos los campos obligatorios estén completos
+     */
+    @Transactional
+    public ApplicationResponse completeDraft(String applicationId, String userId) {
+        log.info("Completing draft: {} for user: {}", applicationId, userId);
+
+        CreditApplication application = applicationRepository.findByApplicationId(applicationId)
+                .orElseThrow(() -> new RuntimeException("Solicitud no encontrada"));
+
+        // Validar que la solicitud pertenece al usuario
+        if (!application.getUser().getUserId().equals(userId)) {
+            throw new RuntimeException("No tiene permiso para modificar esta solicitud");
+        }
+
+        // Validar que está en estado DRAFT
+        if (!ApplicationStatus.DRAFT.name().equals(application.getStatus())) {
+            throw new RuntimeException("Solo se pueden completar solicitudes en estado DRAFT");
+        }
+
+        // Validar que los campos obligatorios estén completos
+        validateRequiredFields(application);
+
+        // Validar que aceptó los términos
+        if (application.getAcceptTerms() == null || !application.getAcceptTerms()) {
+            throw new RuntimeException("Debe aceptar los términos y condiciones para completar la solicitud");
+        }
+
+        // Guardar aplicación actualizada (el cambio de estado se hará en el controller usando StateWorkflowService)
+        CreditApplication saved = applicationRepository.save(application);
+        log.info("Draft validated and ready to submit: {}", applicationId);
+
+        // Calcular evaluación de riesgo automáticamente ahora que está completa
+        try {
+            riskAssessmentService.assessRiskAutomatically(saved.getApplicationId());
+            log.info("Risk assessment calculated automatically for application: {}", saved.getApplicationId());
+        } catch (Exception e) {
+            log.warn("Error calculating risk assessment automatically for application {}: {}", 
+                     saved.getApplicationId(), e.getMessage());
+            // No fallar si el cálculo de riesgo falla
+        }
+
+        return mapToResponse(saved);
+    }
+
+    /**
+     * Validar que los campos obligatorios estén completos
+     */
+    private void validateRequiredFields(CreditApplication application) {
+        if (application.getCompanyName() == null || application.getCompanyName().isBlank()) {
+            throw new RuntimeException("El nombre de la empresa es obligatorio");
+        }
+        if (application.getCuit() == null || application.getCuit().isBlank()) {
+            throw new RuntimeException("El CUIT es obligatorio");
+        }
+        if (application.getAmountRequested() == null || application.getAmountRequested().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("El monto solicitado es obligatorio y debe ser mayor a cero");
+        }
+        if (application.getCreditMonths() == null || application.getCreditMonths() < 1) {
+            throw new RuntimeException("Los meses de crédito son obligatorios y deben ser al menos 1");
+        }
     }
 
     private ApplicationResponse mapToResponse(CreditApplication application) {
