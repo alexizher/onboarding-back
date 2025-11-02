@@ -310,7 +310,7 @@ export class NotificationService {
 
 ## Notas de seguridad
 
-⚠️ **IMPORTANTE:** Aceptar el token en query parameter es práctico para desarrollo, pero en producción considera:
+**IMPORTANTE:** Aceptar el token en query parameter es práctico para desarrollo, pero en producción considera:
 - Usar un endpoint alternativo que solo acepte token en query param (no en headers)
 - Validar que solo se use en desarrollo (`@Profile("dev")`)
 - O implementar un polyfill de EventSource que permita headers (librería externa)
