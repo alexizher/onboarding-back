@@ -20,4 +20,7 @@ public class LoginRequest {
     
     @NotBlank(message = "Password es requerido")
     private String password;
+    
+    // Campo opcional para identificar el dispositivo (para refresh tokens)
+    private String deviceId;
 }

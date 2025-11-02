@@ -39,4 +39,38 @@ public class PasswordResetToken {
     
     @Column(name = "user_agent", columnDefinition = "TEXT")
     private String userAgent;
+    
+    // Campos de seguridad para prevenir uso malintencionado
+    @Column(name = "used_at")
+    private LocalDateTime usedAt;
+    
+    @Column(name = "used_from_ip", length = 45)
+    private String usedFromIp;
+    
+    @Column(name = "used_from_user_agent", columnDefinition = "TEXT")
+    private String usedFromUserAgent;
+    
+    @Column(name = "is_blocked", nullable = false)
+    @Builder.Default
+    private Boolean isBlocked = false;
+    
+    @Column(name = "failed_attempts", nullable = false)
+    @Builder.Default
+    private Integer failedAttempts = 0;
+    
+    @Column(name = "last_attempt_at")
+    private LocalDateTime lastAttemptAt;
+    
+    @Column(name = "blocked_at")
+    private LocalDateTime blockedAt;
+    
+    @Column(name = "blocked_reason", length = 255)
+    private String blockedReason;
+    
+    @Column(name = "cooldown_until")
+    private LocalDateTime cooldownUntil;
+    
+    @Column(name = "validation_count", nullable = false)
+    @Builder.Default
+    private Integer validationCount = 0;
 }

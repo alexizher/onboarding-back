@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -24,6 +25,7 @@ import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Autowired
@@ -61,28 +63,19 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/test/**").permitAll()
                 .requestMatchers("/h2-console/**").permitAll()
-                // Endpoints protegidos por roles
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/manager/**").hasAnyRole("MANAGER", "ADMIN")
-                .requestMatchers("/api/analyst/**").hasAnyRole("ANALYST", "MANAGER", "ADMIN")
-                .requestMatchers("/api/applicant/**").hasAnyRole("APPLICANT", "ANALYST", "MANAGER", "ADMIN")
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/test/**").permitAll()
                 .requestMatchers("/api/security/password-reset/**").permitAll()
                 .requestMatchers("/api/security/validate-password").permitAll()
+                // Notificaciones SSE: permitir acceso con token en query param o por header Authorization
+                .requestMatchers("/api/notifications/stream").permitAll()
                 // Endpoints protegidos por roles
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/manager/**").hasAnyRole("MANAGER", "ADMIN")
                 .requestMatchers("/api/analyst/**").hasAnyRole("ANALYST", "MANAGER", "ADMIN")
                 .requestMatchers("/api/applicant/**").hasAnyRole("APPLICANT", "ANALYST", "MANAGER", "ADMIN")
-                    .requestMatchers("/api/security/**").hasAnyRole("APPLICANT", "ANALYST", "MANAGER", "ADMIN")
-                    // Notificaciones SSE: permitir acceso con token en query param o por header Authorization
-                    .requestMatchers("/api/notifications/stream").permitAll()
+                // /api/security/** está protegido por @PreAuthorize en los controladores
+                .requestMatchers("/api/security/**").authenticated()
                 // Cualquier otra petición requiere autenticación
                 .anyRequest().authenticated()
-                // Permitir acceso sin autenticación
-                //.requestMatchers("/**").permitAll()
-                //.anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         //.headers(headers -> headers

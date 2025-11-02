@@ -31,22 +31,30 @@ public class PasswordResetService {
     // Duración del token en horas
     private static final int TOKEN_DURATION_HOURS = 1;
     private static final int MAX_ATTEMPTS_PER_HOUR = 3;
+    
+    // Seguridad del token
+    private static final int MAX_FAILED_ATTEMPTS = 3;
+    private static final int COOLDOWN_MINUTES = 15;
 
     /**
      * Generar token de recuperación de contraseña
+     * Nota: No revela si el email existe o no por seguridad
      */
     public String generateResetToken(String email, String ipAddress, String userAgent) {
         // Verificar que el usuario existe
         Optional<User> userOptional = userRepository.findByEmail(email);
         if (userOptional.isEmpty()) {
+            // Log de seguridad pero NO revelar que el email no existe
             securityAuditService.logSecurityEvent(
                 null, 
                 "PASSWORD_RESET_ATTEMPT_INVALID_EMAIL", 
                 ipAddress, 
                 userAgent, 
-                "Intento de recuperación de contraseña con email inexistente: " + email,
+                "Intento de recuperación de contraseña con email inexistente",
                 "MEDIUM"
             );
+            // No devolver null directamente, devolver un mensaje genérico
+            // Retornar null pero el servicio llamador debe manejar el mensaje genérico
             return null;
         }
 
@@ -92,63 +100,210 @@ public class PasswordResetService {
             "LOW"
         );
 
+        // Nota: La notificación de password reset se manejará desde AuthService
+        // donde se llama a generatePasswordResetToken, para evitar dependencia circular
+
         return token;
     }
 
     /**
-     * Validar token de recuperación
+     * Validar token de recuperación con medidas de seguridad
      */
-    public boolean validateResetToken(String token) {
+    public boolean validateResetToken(String token, String ipAddress, String userAgent) {
         Optional<PasswordResetToken> tokenOptional = tokenRepository.findByToken(token);
         
         if (tokenOptional.isEmpty()) {
-            return false;
-        }
-
-        PasswordResetToken resetToken = tokenOptional.get();
-        
-        // Verificar si el token está usado o expirado
-        if (resetToken.getUsed() || resetToken.getExpiresAt().isBefore(LocalDateTime.now())) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Cambiar contraseña usando token
-     */
-    public boolean resetPassword(String token, String newPassword, String ipAddress, String userAgent) {
-        Optional<PasswordResetToken> tokenOptional = tokenRepository.findByToken(token);
-        
-        if (tokenOptional.isEmpty() || !validateResetToken(token)) {
+            // Registrar intento con token inexistente
             securityAuditService.logSecurityEvent(
-                null, 
-                "PASSWORD_RESET_INVALID_TOKEN", 
-                ipAddress, 
-                userAgent, 
-                "Intento de cambio de contraseña con token inválido",
+                null,
+                "PASSWORD_RESET_INVALID_TOKEN_ATTEMPT",
+                ipAddress,
+                userAgent,
+                "Intento de validación con token inexistente",
                 "MEDIUM"
             );
             return false;
         }
 
         PasswordResetToken resetToken = tokenOptional.get();
+        
+        // Incrementar contador de validaciones
+        resetToken.setValidationCount(resetToken.getValidationCount() + 1);
+        resetToken.setLastAttemptAt(LocalDateTime.now());
+        tokenRepository.save(resetToken);
+        
+        // Verificar si el token está bloqueado
+        if (resetToken.getIsBlocked()) {
+            securityAuditService.logSecurityEvent(
+                resetToken.getUserId(),
+                "PASSWORD_RESET_BLOCKED_TOKEN_ATTEMPT",
+                ipAddress,
+                userAgent,
+                "Intento de usar token bloqueado. Razón: " + resetToken.getBlockedReason(),
+                "HIGH"
+            );
+            return false;
+        }
+        
+        // Verificar cooldown
+        if (resetToken.getCooldownUntil() != null && 
+            resetToken.getCooldownUntil().isAfter(LocalDateTime.now())) {
+            securityAuditService.logSecurityEvent(
+                resetToken.getUserId(),
+                "PASSWORD_RESET_COOLDOWN_ACTIVE",
+                ipAddress,
+                userAgent,
+                "Intento durante período de cooldown",
+                "MEDIUM"
+            );
+            return false;
+        }
+        
+        // Verificar si el token está usado
+        if (resetToken.getUsed()) {
+            securityAuditService.logSecurityEvent(
+                resetToken.getUserId(),
+                "PASSWORD_RESET_USED_TOKEN_ATTEMPT",
+                ipAddress,
+                userAgent,
+                "Intento de usar token ya utilizado",
+                "HIGH"
+            );
+            return false;
+        }
+        
+        // Verificar si el token está expirado
+        if (resetToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            securityAuditService.logSecurityEvent(
+                resetToken.getUserId(),
+                "PASSWORD_RESET_EXPIRED_TOKEN_ATTEMPT",
+                ipAddress,
+                userAgent,
+                "Intento de usar token expirado",
+                "MEDIUM"
+            );
+            return false;
+        }
+        
+        // Validar IP y User Agent (warning si es diferente, pero no bloquear)
+        boolean ipMismatch = resetToken.getIpAddress() != null && 
+                            !resetToken.getIpAddress().equals(ipAddress);
+        boolean userAgentMismatch = resetToken.getUserAgent() != null && 
+                                   !resetToken.getUserAgent().equals(userAgent);
+        
+        if (ipMismatch || userAgentMismatch) {
+            String details = "Validación con origen diferente. ";
+            if (ipMismatch) details += "IP: " + resetToken.getIpAddress() + " vs " + ipAddress + ". ";
+            if (userAgentMismatch) details += "User Agent diferente.";
+            
+            securityAuditService.logSecurityEvent(
+                resetToken.getUserId(),
+                "PASSWORD_RESET_SUSPICIOUS_ORIGIN",
+                ipAddress,
+                userAgent,
+                details,
+                "MEDIUM"
+            );
+            // No bloquear, pero registrar como sospechoso
+        }
+
+        return true;
+    }
+    
+    /**
+     * Validar token (versión simple para compatibilidad)
+     */
+    public boolean validateResetToken(String token) {
+        return validateResetToken(token, null, null);
+    }
+
+    /**
+     * Cambiar contraseña usando token con medidas de seguridad mejoradas
+     */
+    public boolean resetPassword(String token, String newPassword, String ipAddress, String userAgent) {
+        Optional<PasswordResetToken> tokenOptional = tokenRepository.findByToken(token);
+        
+        if (tokenOptional.isEmpty()) {
+            securityAuditService.logSecurityEvent(
+                null, 
+                "PASSWORD_RESET_INVALID_TOKEN", 
+                ipAddress, 
+                userAgent, 
+                "Intento de cambio de contraseña con token inexistente",
+                "HIGH"
+            );
+            return false;
+        }
+
+        PasswordResetToken resetToken = tokenOptional.get();
+        
+        // Validar token con medidas de seguridad
+        if (!validateResetToken(token, ipAddress, userAgent)) {
+            // Incrementar intentos fallidos
+            resetToken.setFailedAttempts(resetToken.getFailedAttempts() + 1);
+            resetToken.setLastAttemptAt(LocalDateTime.now());
+            
+            // Bloquear si excede máximo de intentos
+            if (resetToken.getFailedAttempts() >= MAX_FAILED_ATTEMPTS) {
+                resetToken.setIsBlocked(true);
+                resetToken.setBlockedAt(LocalDateTime.now());
+                resetToken.setBlockedReason("MAX_FAILED_ATTEMPTS");
+                resetToken.setCooldownUntil(LocalDateTime.now().plusMinutes(COOLDOWN_MINUTES));
+                
+                securityAuditService.logSecurityEvent(
+                    resetToken.getUserId(),
+                    "PASSWORD_RESET_TOKEN_BLOCKED",
+                    ipAddress,
+                    userAgent,
+                    "Token bloqueado por exceso de intentos fallidos: " + resetToken.getFailedAttempts(),
+                    "CRITICAL"
+                );
+                
+                // Invalidar todos los tokens del usuario por seguridad
+                tokenRepository.invalidateAllUserTokens(resetToken.getUserId());
+            }
+            
+            tokenRepository.save(resetToken);
+            return false;
+        }
+
         Optional<User> userOptional = userRepository.findById(resetToken.getUserId());
         
         if (userOptional.isEmpty()) {
+            securityAuditService.logSecurityEvent(
+                resetToken.getUserId(),
+                "PASSWORD_RESET_USER_NOT_FOUND",
+                ipAddress,
+                userAgent,
+                "Usuario asociado al token no encontrado",
+                "HIGH"
+            );
             return false;
         }
 
         User user = userOptional.get();
         
+        // Verificar que la nueva contraseña no esté en el historial (si PasswordHistoryService está disponible)
+        // Nota: Esta verificación se puede hacer aquí o en AuthService
+        // Por ahora, solo cambiamos la contraseña
+        
         // Cambiar contraseña
-        user.setPasswordHash(newPassword); // El hash se aplicará en el AuthService
+        user.setPasswordHash(newPassword); // El hash ya viene aplicado desde AuthService
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+        
+        // Nota: La gestión del historial de contraseñas se hace en AuthService
+        // cuando se llama a resetPasswordWithToken desde ahí
 
-        // Marcar token como usado
-        tokenRepository.markTokenAsUsed(token);
+        // Marcar token como usado y guardar información de uso
+        resetToken.setUsed(true);
+        resetToken.setUsedAt(LocalDateTime.now());
+        resetToken.setUsedFromIp(ipAddress);
+        resetToken.setUsedFromUserAgent(userAgent);
+        tokenRepository.save(resetToken);
+
+        // Invalidar todos los demás tokens del usuario
+        tokenRepository.invalidateAllUserTokens(resetToken.getUserId());
 
         securityAuditService.logSecurityEvent(
             user.getUserId(), 

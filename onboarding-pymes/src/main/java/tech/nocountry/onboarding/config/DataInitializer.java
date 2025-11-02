@@ -2,15 +2,22 @@ package tech.nocountry.onboarding.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import tech.nocountry.onboarding.entities.DocumentType;
 import tech.nocountry.onboarding.entities.ApplicationState;
+import tech.nocountry.onboarding.entities.Role;
+import tech.nocountry.onboarding.entities.User;
 import tech.nocountry.onboarding.repositories.DocumentTypeRepository;
 import tech.nocountry.onboarding.repositories.ApplicationStateRepository;
+import tech.nocountry.onboarding.repositories.RoleRepository;
+import tech.nocountry.onboarding.repositories.UserRepository;
 import tech.nocountry.onboarding.services.RoleService;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
@@ -23,12 +30,25 @@ public class DataInitializer implements CommandLineRunner {
 
     @Autowired
     private ApplicationStateRepository applicationStateRepository;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private RoleRepository roleRepository;
+    
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Override
     public void run(String... args) throws Exception {
         // Crear roles por defecto al iniciar la aplicación
         roleService.createDefaultRoles();
         System.out.println("Roles por defecto creados exitosamente");
+        
+        // Crear usuarios por defecto (admin, analyst, manager)
+        createDefaultUsers();
+        System.out.println("Usuarios por defecto creados exitosamente");
         
         // Crear tipos de documentos por defecto
         createDefaultDocumentTypes();
@@ -97,5 +117,68 @@ public class DataInitializer implements CommandLineRunner {
                 applicationStateRepository.save(state);
             }
         }
+    }
+    
+    private void createDefaultUsers() {
+        // Usuario ADMIN
+        createDefaultUserIfNotExists(
+            "admin@example.com",
+            "admin",
+            "Admin123!@#",
+            "Administrador",
+            "12345678",
+            "ROLE_ADMIN"
+        );
+        
+        // Usuario ANALYST
+        createDefaultUserIfNotExists(
+            "analyst@example.com",
+            "analyst",
+            "Analyst123!@#",
+            "Analista",
+            "87654321",
+            "ROLE_ANALYST"
+        );
+        
+        // Usuario MANAGER
+        createDefaultUserIfNotExists(
+            "manager@example.com",
+            "manager",
+            "Manager123!@#",
+            "Gerente",
+            "11223344",
+            "ROLE_MANAGER"
+        );
+    }
+    
+    private void createDefaultUserIfNotExists(String email, String username, String password, 
+                                             String fullName, String dni, String roleId) {
+        // Verificar si el usuario ya existe
+        if (userRepository.existsByEmail(email) || userRepository.existsByUsername(username)) {
+            System.out.println("Usuario ya existe: " + email + " o " + username);
+            return;
+        }
+        
+        // Obtener el rol
+        Role role = roleRepository.findByRoleId(roleId)
+                .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + roleId));
+        
+        // Crear el usuario
+        User user = User.builder()
+                .userId(UUID.randomUUID().toString())
+                .email(email)
+                .username(username)
+                .passwordHash(passwordEncoder.encode(password))
+                .fullName(fullName)
+                .dni(dni)
+                .phone("+5491112345678")
+                .role(role)
+                .isActive(true)
+                .consentGdpr(true)
+                .createdAt(LocalDateTime.now())
+                .build();
+        
+        userRepository.save(user);
+        System.out.println("Usuario creado: " + email + " (" + roleId + ")");
     }
 }

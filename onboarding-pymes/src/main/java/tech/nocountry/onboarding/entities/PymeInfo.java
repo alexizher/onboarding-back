@@ -5,8 +5,8 @@ import lombok.Data;
 
 import java.time.LocalDate;
 
-@Entity
-@Table(name = "pyme_info")
+// @Entity - DESHABILITADO: Esta entidad no se usa en el sistema actual
+// @Table(name = "pyme_info")
 @Data
 public class PymeInfo {
     @Id
