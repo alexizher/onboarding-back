@@ -2,14 +2,17 @@ package tech.nocountry.onboarding.services;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tech.nocountry.onboarding.config.SessionProperties;
 import tech.nocountry.onboarding.entities.UserSession;
 import tech.nocountry.onboarding.repositories.UserSessionRepository;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -19,10 +22,8 @@ public class SessionService {
     @Autowired
     private UserSessionRepository sessionRepository;
 
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-
-    // Duración de sesión en horas
-    private static final int SESSION_DURATION_HOURS = 24;
+    @Autowired
+    private SessionProperties sessionProperties;
 
     /**
      * Crear una nueva sesión para un usuario
@@ -35,8 +36,12 @@ public class SessionService {
         }
 
         String sessionId = UUID.randomUUID().toString();
-        String tokenHash = passwordEncoder.encode(token);
-        LocalDateTime expiresAt = LocalDateTime.now().plusHours(SESSION_DURATION_HOURS);
+        // Usar SHA-256 para hash del token JWT (que es muy largo para BCrypt)
+        String tokenHash = hashToken(token);
+        // Duración corta para sistema bancario (30 minutos por defecto)
+        double durationHours = sessionProperties != null ? sessionProperties.getDurationHours() : 0.5;
+        int durationMinutes = (int)(durationHours * 60); // Convertir horas a minutos
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(durationMinutes);
 
         UserSession session = UserSession.builder()
                 .sessionId(sessionId)
@@ -53,16 +58,56 @@ public class SessionService {
     }
 
     /**
-     * Validar una sesión por token
+     * Generar hash SHA-256 de un token JWT
+     */
+    public String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hashBytes) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            
+            return hexString.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("Error al generar hash de token", e);
+        }
+    }
+
+    /**
+     * Validar una sesión por token (incluye verificación de inactividad)
      */
     public boolean validateSession(String token) {
+        String tokenHash = hashToken(token);
+        LocalDateTime now = LocalDateTime.now();
+        
         // Buscar en todas las sesiones activas
         for (UserSession session : sessionRepository.findAll()) {
             if (session.getIsActive() && 
-                session.getExpiresAt().isAfter(LocalDateTime.now()) &&
-                passwordEncoder.matches(token, session.getTokenHash())) {
+                session.getExpiresAt().isAfter(now) &&
+                tokenHash.equals(session.getTokenHash())) {
+                
+                // Verificar timeout de inactividad (sistema bancario)
+                if (session.getLastActivity() != null) {
+                    int inactivityTimeout = sessionProperties != null ? 
+                        sessionProperties.getInactivityTimeoutMinutes() : 15;
+                    LocalDateTime inactivityThreshold = now.minusMinutes(inactivityTimeout);
+                    if (session.getLastActivity().isBefore(inactivityThreshold)) {
+                        // Sesión expirada por inactividad
+                        session.setIsActive(false);
+                        sessionRepository.save(session);
+                        return false;
+                    }
+                }
+                
                 // Actualizar última actividad
-                session.setLastActivity(LocalDateTime.now());
+                session.setLastActivity(now);
                 sessionRepository.save(session);
                 return true;
             }
@@ -74,8 +119,9 @@ public class SessionService {
      * Invalidar una sesión específica
      */
     public boolean invalidateSession(String token) {
+        String tokenHash = hashToken(token);
         for (UserSession session : sessionRepository.findAll()) {
-            if (passwordEncoder.matches(token, session.getTokenHash())) {
+            if (tokenHash.equals(session.getTokenHash())) {
                 session.setIsActive(false);
                 sessionRepository.save(session);
                 return true;
@@ -92,6 +138,49 @@ public class SessionService {
     }
 
     /**
+     * Invalidar una sesión específica por sessionId
+     */
+    public boolean invalidateSessionById(String sessionId, String userId) {
+        Optional<UserSession> sessionOptional = sessionRepository.findById(sessionId);
+        
+        if (sessionOptional.isEmpty()) {
+            return false;
+        }
+        
+        UserSession session = sessionOptional.get();
+        
+        // Verificar que la sesión pertenece al usuario
+        if (!session.getUserId().equals(userId)) {
+            return false;
+        }
+        
+        // Invalidar la sesión
+        session.setIsActive(false);
+        sessionRepository.save(session);
+        
+        return true;
+    }
+
+    /**
+     * Cerrar todas las demás sesiones excepto la actual
+     */
+    public int closeOtherSessions(String userId, String currentTokenHash) {
+        List<UserSession> activeSessions = sessionRepository.findByUserIdAndIsActiveTrue(userId);
+        
+        int closedCount = 0;
+        for (UserSession session : activeSessions) {
+            // No invalidar la sesión actual
+            if (!currentTokenHash.equals(session.getTokenHash())) {
+                session.setIsActive(false);
+                sessionRepository.save(session);
+                closedCount++;
+            }
+        }
+        
+        return closedCount;
+    }
+
+    /**
      * Obtener sesiones activas de un usuario
      */
     public List<UserSession> getUserActiveSessions(String userId) {
@@ -99,15 +188,35 @@ public class SessionService {
     }
 
     /**
-     * Limpiar sesiones expiradas (ejecutar periódicamente)
+     * Limpiar sesiones expiradas y por inactividad (ejecutar periódicamente)
      */
-    @Scheduled(fixedRate = 3600000) // Cada hora
+    @Scheduled(fixedRate = 300000) // Cada 5 minutos para sistema bancario
     public void cleanupExpiredSessions() {
-        List<UserSession> expiredSessions = sessionRepository.findExpiredSessions(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        int inactivityTimeout = sessionProperties != null ? 
+            sessionProperties.getInactivityTimeoutMinutes() : 15;
+        LocalDateTime inactivityThreshold = now.minusMinutes(inactivityTimeout);
+        
+        // Limpiar sesiones expiradas por tiempo
+        List<UserSession> expiredSessions = sessionRepository.findExpiredSessions(now);
         for (UserSession session : expiredSessions) {
             session.setIsActive(false);
         }
-        sessionRepository.saveAll(expiredSessions);
+        
+        // Limpiar sesiones por inactividad
+        List<UserSession> activeSessions = sessionRepository.findAll().stream()
+            .filter(s -> s.getIsActive() != null && s.getIsActive())
+            .filter(s -> s.getLastActivity() != null && s.getLastActivity().isBefore(inactivityThreshold))
+            .toList();
+        
+        for (UserSession session : activeSessions) {
+            session.setIsActive(false);
+        }
+        
+        if (!expiredSessions.isEmpty() || !activeSessions.isEmpty()) {
+            sessionRepository.saveAll(expiredSessions);
+            sessionRepository.saveAll(activeSessions);
+        }
     }
 
     /**

@@ -31,6 +31,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Autowired
     private SecurityAuditService securityAuditService;
 
+    @Autowired
+    private tech.nocountry.onboarding.services.SessionService sessionService;
+
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, 
                                   @NonNull FilterChain filterChain) throws ServletException, IOException {
@@ -48,8 +51,38 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                     Optional<User> userOptional = userRepository.findByUsername(username);
                     
+                    // Verificar si el token está en la blacklist
+                    if (jwtService.isTokenBlacklisted(token)) {
+                        securityAuditService.logSecurityEvent(
+                            null, 
+                            "AUTHENTICATION_BLOCKED", 
+                            ipAddress, 
+                            userAgent, 
+                            "Token JWT está en blacklist (revocado)", 
+                            "HIGH"
+                        );
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
+                    
                     if (userOptional.isPresent() && jwtService.validateToken(token, username)) {
                         User user = userOptional.get();
+                        
+                        // Verificar sesión activa e inactividad (sistema bancario)
+                        if (!sessionService.validateSession(token)) {
+                            securityAuditService.logSecurityEvent(
+                                user.getUserId(), 
+                                "AUTHENTICATION_BLOCKED", 
+                                ipAddress, 
+                                userAgent, 
+                                "Sesión expirada por inactividad o tiempo", 
+                                "MEDIUM"
+                            );
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType("application/json");
+                            response.getWriter().write("{\"success\":false,\"message\":\"Sesión expirada. Por favor, inicia sesión nuevamente.\"}");
+                            return;
+                        }
                         
                         // Verificar que el usuario esté activo
                         if (!user.getIsActive()) {

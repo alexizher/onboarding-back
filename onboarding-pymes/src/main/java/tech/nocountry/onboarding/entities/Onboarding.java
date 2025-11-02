@@ -5,8 +5,8 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "onboarding")
+// @Entity - DESHABILITADO: Esta entidad no se usa en el sistema actual
+// @Table(name = "onboarding")
 @Data
 public class Onboarding {
 

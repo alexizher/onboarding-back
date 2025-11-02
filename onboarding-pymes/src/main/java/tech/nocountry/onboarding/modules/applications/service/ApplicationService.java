@@ -30,6 +30,7 @@ public class ApplicationService {
     private final ApplicationStateRepository stateRepository;
     private final CityRepository cityRepository;
     private final RiskAssessmentService riskAssessmentService;
+    private final tech.nocountry.onboarding.repositories.ClientBlacklistRepository clientBlacklistRepository;
 
     @Transactional
     public ApplicationResponse createApplication(String userId, ApplicationRequest request) {
@@ -38,6 +39,12 @@ public class ApplicationService {
         // Validar que el usuario existe
         User user = userRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        
+        // Validar que el usuario no está en blacklist
+        if (clientBlacklistRepository.isUserBlacklisted(userId)) {
+            log.warn("User {} is blacklisted, cannot create application", userId);
+            throw new RuntimeException("Usuario bloqueado: no puede crear solicitudes de crédito");
+        }
 
         // Crear la solicitud
         CreditApplication application = CreditApplication.builder()

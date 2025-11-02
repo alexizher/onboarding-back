@@ -63,6 +63,26 @@ public class User {
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
     
+    // Campos de bloqueo progresivo de cuenta
+    @Column(name = "failed_login_attempts", nullable = false)
+    @Builder.Default
+    private Integer failedLoginAttempts = 0;
+    
+    @Column(name = "lockout_until")
+    private LocalDateTime lockoutUntil;
+    
+    @Column(name = "lockout_level", nullable = false)
+    @Builder.Default
+    private Integer lockoutLevel = 0;
+    
+    // Email Verification
+    @Column(name = "email_verified", nullable = false)
+    @Builder.Default
+    private Boolean emailVerified = false;
+    
+    @Column(name = "email_verified_at")
+    private LocalDateTime emailVerifiedAt;
+    
     // Relación directa con Role (1:1)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "role_id", nullable = false)
