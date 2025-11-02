@@ -30,7 +30,7 @@ echo ""
 echo "2. Login como admin..."
 ADMIN_TOKEN_RESPONSE=$(curl -s -X POST "$BASE_URL/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"UoT*8q#dK21t!vRw"}')
+  -d '{"email":"admin@example.com","password":"Admin123!@#"}')
 
 ADMIN_JWT=$(echo "$ADMIN_TOKEN_RESPONSE" | jq -r '.token // .data.token')
 ADMIN_USER_ID=$(echo "$ADMIN_TOKEN_RESPONSE" | jq -r '.userId // .data.userId')

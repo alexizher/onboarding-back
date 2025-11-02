@@ -11,7 +11,7 @@ echo ""
 echo "1. Login como analyst..."
 ANALYST_TOKEN_RESPONSE=$(curl -s -X POST "$BASE_URL/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"analyst@example.com","password":"Analyst@123"}')
+  -d '{"email":"analyst@example.com","password":"Analyst123!@#"}')
 
 ANALYST_JWT=$(echo "$ANALYST_TOKEN_RESPONSE" | jq -r '.token // .data.token')
 ANALYST_USER_ID=$(echo "$ANALYST_TOKEN_RESPONSE" | jq -r '.userId // .data.userId')
